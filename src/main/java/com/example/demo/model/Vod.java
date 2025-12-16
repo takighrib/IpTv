@@ -12,7 +12,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Vod {
     @Id
     private String id;
-
     private Integer vodId;
     private String name;
     private Integer categoryId;

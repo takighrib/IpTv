@@ -3,11 +3,11 @@ package com.example.demo.service;
 import com.example.demo.config.XtreamConfig;
 import com.example.demo.model.LiveStream;
 import com.example.demo.repository.LiveStreamRepository;
+import com.example.demo.utils.StreamUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
 
 import java.util.*;
 
@@ -86,10 +86,9 @@ public class LiveStreamService {
                 // Double vérification au niveau de l'URL
                 if (isValidLiveStreamUrl(line.trim())) {
                     currentStream.put("stream_url", line.trim());
-                    currentStream.put("stream_id", generateStreamId(line.trim()));
-                    currentStream.put("category_id", getCategoryId((String) currentStream.get("group_title")));
-                    currentStream.put("category_name",
-                            currentStream.getOrDefault("group_title", "Live TV").toString());
+                    currentStream.put("stream_id", StreamUtils.generateStreamId(line.trim()));
+                    currentStream.put("category_id", StreamUtils.getCategoryId((String) currentStream.get("group_title")));
+                    currentStream.put("category_name", currentStream.getOrDefault("group_title", "Live TV").toString());
                     streams.add(currentStream);
                 }
                 currentStream = null;
@@ -105,39 +104,24 @@ public class LiveStreamService {
      */
     private void extractM3UMetadata(String extinf, Map<String, Object> stream) {
         // tvg-id
-        String tvgId = extractAttribute(extinf, "tvg-id");
+        String tvgId = StreamUtils.extractAttribute(extinf, "tvg-id");
         if (tvgId != null) stream.put("tvg_id", tvgId);
 
         // tvg-logo
-        String tvgLogo = extractAttribute(extinf, "tvg-logo");
+        String tvgLogo = StreamUtils.extractAttribute(extinf, "tvg-logo");
         if (tvgLogo != null) stream.put("stream_icon", tvgLogo);
 
         // group-title
-        String groupTitle = extractAttribute(extinf, "group-title");
+        String groupTitle = StreamUtils.extractAttribute(extinf, "group-title");
         if (groupTitle != null) stream.put("group_title", groupTitle);
 
         // tvg-country
-        String country = extractAttribute(extinf, "tvg-country");
+        String country = StreamUtils.extractAttribute(extinf, "tvg-country");
         if (country != null) stream.put("country", country);
 
         // tvg-language
-        String language = extractAttribute(extinf, "tvg-language");
+        String language = StreamUtils.extractAttribute(extinf, "tvg-language");
         if (language != null) stream.put("language", language);
-    }
-
-    /**
-     * Extrait un attribut de la ligne EXTINF
-     */
-    private String extractAttribute(String extinf, String attributeName) {
-        String pattern = attributeName + "=\"";
-        int start = extinf.indexOf(pattern);
-        if (start == -1) return null;
-
-        start += pattern.length();
-        int end = extinf.indexOf("\"", start);
-        if (end == -1) return null;
-
-        return extinf.substring(start, end);
     }
 
     /**
@@ -192,7 +176,10 @@ public class LiveStreamService {
     }
 
     /**
-     * Sauvegarde en DB avec gestion des erreurs améliorée
+     * Sauvegarde en DB avec UPSERT (évite les doublons)
+     */
+    /**
+     * Sauvegarde en DB avec UPSERT (évite les doublons)
      */
     public void saveLiveStreams(List<Map<String, Object>> streams) {
         if (streams == null || streams.isEmpty()) {
@@ -200,37 +187,66 @@ public class LiveStreamService {
             return;
         }
 
-        int savedCount = 0;
+        int createdCount = 0;
+        int updatedCount = 0;
         int errorCount = 0;
 
         for (Map<String, Object> s : streams) {
             try {
-                LiveStream liveStream = LiveStream.builder()
-                        .streamId(parseIntSafely(s.get("stream_id")))
-                        .name(getStringSafely(s, "name"))
-                        .categoryId(parseIntSafely(s.get("category_id")))
-                        .categoryName(getStringSafely(s, "category_name"))
-                        .streamUrl(getStringSafely(s, "stream_url"))
-                        .streamIcon(getStringSafely(s, "stream_icon"))
-                        .build();
+                Integer streamId = StreamUtils.parseIntOrZero(s.get("stream_id"));
+
+                if (streamId == 0) {
+                    System.out.println("⚠ Stream ignoré: streamId invalide");
+                    errorCount++;
+                    continue;
+                }
+
+                // Cherche si le stream existe déjà
+                LiveStream liveStream = liveStreamRepository.findByStreamId(streamId)
+                        .orElse(new LiveStream());
+
+                boolean isNew = (liveStream.getId() == null);
+
+                // Met à jour les champs
+                liveStream.setStreamId(streamId);
+                liveStream.setName(StreamUtils.getStringSafely(s, "name"));
+                liveStream.setCategoryId(StreamUtils.parseIntOrZero(s.get("category_id")));
+                liveStream.setCategoryName(StreamUtils.getStringSafely(s, "category_name", "category_id"));
+                liveStream.setStreamIcon(StreamUtils.getStringSafely(s, "stream_icon"));
+
+                // Construire l'URL si elle n'existe pas
+                String streamUrl = StreamUtils.getStringSafely(s, "stream_url");
+                if (streamUrl.isEmpty()) {
+                    // Construire l'URL du live stream
+                    streamUrl = xtreamConfig.getBaseUrl() + "/"
+                            + xtreamConfig.getUsername() + "/"
+                            + xtreamConfig.getPassword() + "/"
+                            + streamId;
+                }
+                liveStream.setStreamUrl(streamUrl);
 
                 // Validation avant sauvegarde
-                if (liveStream.getName() != null && liveStream.getStreamUrl() != null) {
+                if (liveStream.getName() != null && !liveStream.getName().isEmpty()) {
+
                     liveStreamRepository.save(liveStream);
-                    savedCount++;
+
+                    if (isNew) {
+                        createdCount++;
+                    } else {
+                        updatedCount++;
+                    }
                 } else {
-                    System.err.println("⚠ Live stream invalide ignoré: " + s.get("name"));
+                    System.out.println("⚠ Live stream invalide ignoré: " + s.get("name"));
                     errorCount++;
                 }
             } catch (Exception e) {
-                System.err.println("❌ Erreur sauvegarde live stream: " + s.get("name") + " - " + e.getMessage());
+                System.out.println("❌ Erreur sauvegarde live stream: " + s.get("name") + " - " + e.getMessage());
                 errorCount++;
             }
         }
 
-        System.out.println("✅ Live Streams sauvegardés: " + savedCount + " réussis, " + errorCount + " erreurs");
+        System.out.println("✅ Live Streams: " + createdCount + " créés, " + updatedCount + " mis à jour, " + errorCount + " erreurs");
     }
-
     /**
      * Sauvegarde optimisée en lot pour de gros volumes
      */
@@ -269,18 +285,20 @@ public class LiveStreamService {
      * Recherche de live streams par nom
      */
     public List<LiveStream> searchLiveStreamsByName(String searchTerm) {
-        // TODO: Implémenter dans le repository
-        // return liveStreamRepository.findByNameContainingIgnoreCase(searchTerm);
-        return new ArrayList<>();
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return liveStreamRepository.findByNameContainingIgnoreCase(searchTerm.trim());
     }
 
     /**
      * Récupère les live streams par catégorie
      */
     public List<LiveStream> getLiveStreamsByCategory(String categoryName) {
-        // TODO: Implémenter dans le repository
-        // return liveStreamRepository.findByCategoryName(categoryName);
-        return new ArrayList<>();
+        if (categoryName == null || categoryName.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return liveStreamRepository.findByCategoryName(categoryName.trim());
     }
 
     /**
@@ -297,34 +315,5 @@ public class LiveStreamService {
         }
 
         return streams;
-    }
-
-    // Méthodes utilitaires
-    private int parseIntSafely(Object value) {
-        if (value == null) return 0;
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    private String getStringSafely(Map<String, Object> map, String... keys) {
-        for (String key : keys) {
-            Object value = map.get(key);
-            if (value != null && !value.toString().trim().isEmpty()) {
-                return value.toString().trim();
-            }
-        }
-        return "";
-    }
-
-    private int generateStreamId(String url) {
-        return Math.abs(url.hashCode());
-    }
-
-    private int getCategoryId(String groupTitle) {
-        if (groupTitle == null) return 0;
-        return Math.abs(groupTitle.hashCode()) % 1000;
     }
 }

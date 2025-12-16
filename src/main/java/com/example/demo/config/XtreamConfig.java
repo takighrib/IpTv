@@ -12,9 +12,9 @@ import org.springframework.context.annotation.Configuration;
 @Data
 public class XtreamConfig {
 
-    private String baseUrl = "http://buysmart.tn:8080";
-    private String username = "buysmart01370";
-    private String password = "0731brd";
+    private String baseUrl;
+    private String username;
+    private String password;
 
     // URLs construites automatiquement
     public String getLiveStreamsUrl() {

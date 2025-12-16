@@ -15,7 +15,6 @@ public class LiveStream {
 
     @Id
     private String id;
-
     private Integer streamId;
     private String name;
     private Integer categoryId;

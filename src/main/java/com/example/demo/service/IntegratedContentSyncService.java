@@ -1,12 +1,13 @@
 package com.example.demo.service;
 
 
+import com.example.demo.config.XtreamConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-        import java.util.stream.Collectors;
+import java.util.stream.Collectors;
 
 /**
  * Service principal qui coordonne tous vos services existants
@@ -22,10 +23,8 @@ public class IntegratedContentSyncService {
     private final SeriesService seriesService;
     private final EpgService epgService;
     private final M3UFallbackService m3uFallbackService;
+    private final XtreamConfig xtreamConfig; // ✅ Injecter la config
 
-    private final String xtreamBaseUrl = "http://buysmart.tn:8080";
-    private final String username = "buysmart01370";
-    private final String password = "0731brd";
 
     /**
      * Synchronise TOUT le contenu depuis Xtream avec fallback M3U intelligent
@@ -56,7 +55,6 @@ public class IntegratedContentSyncService {
 
         return result;
     }
-
     /**
      * Synchronise les Live Streams via votre service existant
      */
@@ -141,8 +139,7 @@ public class IntegratedContentSyncService {
      * Fallback intelligent : Parse le M3U et sépare par type
      */
     public ContentSyncResult syncFromM3UWithIntelligentSeparation() {
-        String m3uUrl = xtreamBaseUrl + "/get.php?username=" + username +
-                "&password=" + password + "&type=m3u_plus&output=ts";
+        String m3uUrl = xtreamConfig.getM3uUrl();
 
         ContentSyncResult result = new ContentSyncResult();
 

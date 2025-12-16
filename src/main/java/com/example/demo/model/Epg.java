@@ -12,7 +12,6 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Epg {
     @Id
     private String id;
-
     private Integer streamId;
     private String title;
     private String start;
