@@ -6,6 +6,8 @@ import com.example.demo.repository.CompteRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,8 +18,7 @@ public class CompteService {
 
     @Autowired
     private CompteRepository compteRepository;
-
-    private BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private  PasswordEncoder passwordEncoder;
 
     // Créer un compte
     public Compte creerCompte(String email, String password, String nom, String prenom) {
@@ -103,7 +104,7 @@ public class CompteService {
 
         compte.setStatus("PAYANT");
         compte.setDateExpiration(LocalDateTime.now().plusMonths(dureeMois));
-        compte.setIsActive(true);
+        compte.setActive(true);
 
         return compteRepository.save(compte);
     }
@@ -125,7 +126,7 @@ public class CompteService {
         for (Compte compte : comptes) {
             if (compte.isExpired()) {
                 compte.setStatus("NON_PAYANT");
-                compte.setIsActive(false);
+                compte.setActive(false);
                 compteRepository.save(compte);
             }
         }

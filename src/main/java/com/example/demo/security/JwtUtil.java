@@ -1,10 +1,8 @@
 package com.example.demo.security;
 
-
 import com.example.demo.config.JwtConfig;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -49,11 +47,11 @@ public class JwtUtil {
         Date expirationDate = new Date(now.getTime() + jwtConfig.getExpiration());
 
         return Jwts.builder()
-                .setClaims(claims)
-                .setSubject(subject)
-                .setIssuedAt(now)
-                .setExpiration(expirationDate)
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .claims(claims)
+                .subject(subject)
+                .issuedAt(now)
+                .expiration(expirationDate)
+                .signWith(getSigningKey())
                 .compact();
     }
 
@@ -92,11 +90,11 @@ public class JwtUtil {
      */
     private Claims extractAllClaims(String token) {
         try {
-            return Jwts.parserBuilder()
-                    .setSigningKey(getSigningKey())
+            return Jwts.parser()
+                    .verifyWith(getSigningKey())
                     .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+                    .parseSignedClaims(token)
+                    .getPayload();
         } catch (Exception e) {
             throw new RuntimeException("Token invalide: " + e.getMessage());
         }
@@ -161,5 +159,6 @@ public class JwtUtil {
         }
     }
 }
+
 
 

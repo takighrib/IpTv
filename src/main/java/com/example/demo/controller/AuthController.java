@@ -8,15 +8,17 @@ import com.example.demo.dto.GoogleLoginRequest;
 import com.example.demo.model.Compte;
 import com.example.demo.service.CompteService;
 import com.example.demo.security.JwtUtil;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import javax.validation.Valid;
-import java.util.HashMap;
+import jakarta.validation.constraints.*;
+
 import java.util.Map;
 import java.util.Optional;
+
 
 @RestController
 @RequestMapping("/api/auth")
@@ -71,7 +73,7 @@ public class AuthController {
             // Vérifier si le compte est expiré (pour les comptes payants)
             if (compte.isExpired()) {
                 compte.setStatus("NON_PAYANT");
-                compte.setIsActive(false);
+                compte.setActive(false);
                 compteService.supprimerCompte(compte.getId()); // Met à jour
 
                 return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
