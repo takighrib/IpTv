@@ -10,42 +10,46 @@ import java.util.Map;
 import com.example.demo.service.EpgService.EpgSyncResult;
 
 
+import com.example.demo.service.EpgService;
+import com.example.demo.security.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
 @RestController
-@RequestMapping("/epg")
+@RequestMapping("/api/epg")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class EpgController {
 
     private final EpgService epgService;
+    private final JwtUtil jwtUtil;
 
     @GetMapping("/sync/{streamId}")
-    public Map<String, Object> syncEpg(
-            @PathVariable Integer streamId,
-            @RequestParam(defaultValue = "false") boolean forceFallback) {
-
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<?> syncEpg(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable Integer streamId) {
 
         try {
-            EpgSyncResult result;
+            String token = authHeader.substring(7);
+            String userId = jwtUtil.extractUserId(token);
 
-            if (forceFallback) {
-                // Utiliser la méthode fallback pour ce stream
-                result = epgService.syncEpgForStream(streamId); // dans le service, gère fallback si nécessaire
-            } else {
-                result = epgService.syncEpgForStream(streamId);
-            }
+            EpgService.EpgSyncResult result = epgService.syncEpgForStreamForUser(userId, streamId);
 
-            response.put("message", result.getMessage());
-            response.put("streamId", result.getStreamId());
-            response.put("entriesCount", result.getEntriesCount());
-            response.put("status", "success");
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", result.getMessage(),
+                    "streamId", result.getStreamId(),
+                    "entriesCount", result.getEntriesCount()
+            ));
 
         } catch (Exception e) {
-            e.printStackTrace();
-            response.put("message", "❌ Error synchronizing EPG for stream " + streamId);
-            response.put("error", e.getMessage());
-            response.put("status", "failed");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "❌ Erreur: " + e.getMessage()
+            ));
         }
-
-        return response;
     }
 }

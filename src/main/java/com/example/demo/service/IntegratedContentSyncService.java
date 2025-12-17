@@ -1,7 +1,5 @@
 package com.example.demo.service;
 
-
-import com.example.demo.config.XtreamConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,59 +8,65 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * Service principal qui coordonne tous vos services existants
- * et ajoute la fonctionnalité de parsing M3U intelligent
+ * Service principal qui coordonne tous les services de synchronisation
+ * avec support multi-utilisateur
  */
 @Service
 @RequiredArgsConstructor
 public class IntegratedContentSyncService {
 
-    // Vos services existants
     private final LiveStreamService liveStreamService;
     private final VodService vodService;
     private final SeriesService seriesService;
     private final EpgService epgService;
-    private final M3UFallbackService m3uFallbackService;
-    private final XtreamConfig xtreamConfig; // ✅ Injecter la config
-
+    private final UserContextService userContextService;
 
     /**
-     * Synchronise TOUT le contenu depuis Xtream avec fallback M3U intelligent
+     * Synchronise TOUT le contenu pour un utilisateur spécifique
      */
     @Transactional
-    public ContentSyncResult syncAllContent() {
+    public ContentSyncResult syncAllContentForUser(String userId) {
         ContentSyncResult result = new ContentSyncResult();
 
         try {
-            // 1. Essaie les APIs Xtream existantes
-            System.out.println("🚀 Début de la synchronisation complète...");
+            // Vérifier que l'utilisateur a une config Xtream valide
+            if (!userContextService.hasValidXtreamConfig(userId)) {
+                throw new RuntimeException("Configuration Xtream non trouvée ou invalide pour cet utilisateur");
+            }
 
-            result.addLiveStreams(syncLiveStreamsFromXtream());
-            result.addVodContent(syncVodFromXtream());
-            result.addSeries(syncSeriesFromXtream());
+            System.out.println("🚀 Début de la synchronisation complète pour l'utilisateur " + userId);
 
-            // 2. Synchronise les EPG pour les live streams
-            syncEpgForAllStreams(result.getLiveStreams());
+            // 1. Synchroniser les Live Streams
+            result.addLiveStreams(syncLiveStreamsForUser(userId));
 
-            System.out.println("✅ Synchronisation Xtream terminée");
+            // 2. Synchroniser les VOD
+            result.addVodContent(syncVodForUser(userId));
+
+            // 3. Synchroniser les Séries
+            result.addSeries(syncSeriesForUser(userId));
+
+            // 4. Synchroniser les EPG pour les live streams (optionnel)
+            if (!result.getLiveStreams().isEmpty()) {
+                syncEpgForUserStreams(userId, result.getLiveStreams());
+            }
+
+            System.out.println("✅ Synchronisation complète terminée pour l'utilisateur " + userId);
 
         } catch (Exception e) {
-            System.err.println("⚠ Erreur APIs Xtream, fallback vers M3U : " + e.getMessage());
-
-            // 3. Fallback intelligent avec parsing M3U
-            result = syncFromM3UWithIntelligentSeparation();
+            System.err.println("❌ Erreur synchronisation complète: " + e.getMessage());
+            throw new RuntimeException("Échec de la synchronisation: " + e.getMessage(), e);
         }
 
         return result;
     }
+
     /**
-     * Synchronise les Live Streams via votre service existant
+     * Synchronise les Live Streams pour un utilisateur
      */
-    public List<Map<String, Object>> syncLiveStreamsFromXtream() {
+    public List<Map<String, Object>> syncLiveStreamsForUser(String userId) {
         try {
-            List<Map<String, Object>> streams = liveStreamService.fetchLiveStreamsFromXtream();
-            liveStreamService.saveLiveStreams(streams);
-            System.out.println("✅ " + streams.size() + " live streams synchronisés");
+            List<Map<String, Object>> streams = liveStreamService.syncAndSaveLiveStreamsForUser(userId);
+            System.out.println("✅ " + streams.size() + " live streams synchronisés pour l'utilisateur " + userId);
             return streams;
         } catch (Exception e) {
             System.err.println("❌ Erreur sync live streams: " + e.getMessage());
@@ -71,13 +75,12 @@ public class IntegratedContentSyncService {
     }
 
     /**
-     * Synchronise les VOD via votre service existant
+     * Synchronise les VOD pour un utilisateur
      */
-    public List<Map<String, Object>> syncVodFromXtream() {
+    public List<Map<String, Object>> syncVodForUser(String userId) {
         try {
-            List<Map<String, Object>> vods = vodService.fetchVodStreams();
-            vodService.saveVodStreams(vods);
-            System.out.println("✅ " + vods.size() + " VOD synchronisés");
+            List<Map<String, Object>> vods = vodService.syncAndSaveVodStreamsForUser(userId);
+            System.out.println("✅ " + vods.size() + " VOD synchronisés pour l'utilisateur " + userId);
             return vods;
         } catch (Exception e) {
             System.err.println("❌ Erreur sync VOD: " + e.getMessage());
@@ -86,13 +89,12 @@ public class IntegratedContentSyncService {
     }
 
     /**
-     * Synchronise les Séries via votre service existant
+     * Synchronise les Séries pour un utilisateur
      */
-    public List<Map<String, Object>> syncSeriesFromXtream() {
+    public List<Map<String, Object>> syncSeriesForUser(String userId) {
         try {
-            List<Map<String, Object>> series = seriesService.fetchSeriesStreams();
-            seriesService.saveSeriesStreams(series);
-            System.out.println("✅ " + series.size() + " séries synchronisées");
+            List<Map<String, Object>> series = seriesService.syncAndSaveSeriesStreamsForUser(userId);
+            System.out.println("✅ " + series.size() + " séries synchronisées pour l'utilisateur " + userId);
             return series;
         } catch (Exception e) {
             System.err.println("❌ Erreur sync séries: " + e.getMessage());
@@ -101,9 +103,9 @@ public class IntegratedContentSyncService {
     }
 
     /**
-     * Synchronise les EPG pour tous les live streams
+     * Synchronise les EPG pour tous les live streams d'un utilisateur
      */
-    public void syncEpgForAllStreams(List<Map<String, Object>> liveStreams) {
+    public void syncEpgForUserStreams(String userId, List<Map<String, Object>> liveStreams) {
         if (liveStreams == null || liveStreams.isEmpty()) {
             System.out.println("⚠ Aucun live stream pour synchroniser les EPG");
             return;
@@ -114,16 +116,20 @@ public class IntegratedContentSyncService {
 
         System.out.println("📺 Synchronisation des EPG pour " + liveStreams.size() + " chaînes...");
 
-        for (Map<String, Object> stream : liveStreams) {
+        // Limiter à 50 streams pour éviter de surcharger
+        int maxStreamsToSync = Math.min(liveStreams.size(), 50);
+
+        for (int i = 0; i < maxStreamsToSync; i++) {
+            Map<String, Object> stream = liveStreams.get(i);
             try {
                 Integer streamId = parseIntSafely(stream.get("stream_id"));
                 if (streamId != null && streamId > 0) {
-                    epgService.syncEpgForStream(streamId);
+                    epgService.syncEpgForStreamForUser(userId, streamId);
                     successCount++;
 
-                    // Log de progression tous les 50 streams
-                    if (successCount % 50 == 0) {
-                        System.out.println("📊 EPG synchronisés: " + successCount + "/" + liveStreams.size());
+                    // Log de progression tous les 10 streams
+                    if (successCount % 10 == 0) {
+                        System.out.println("📊 EPG synchronisés: " + successCount + "/" + maxStreamsToSync);
                     }
                 }
             } catch (Exception e) {
@@ -133,185 +139,29 @@ public class IntegratedContentSyncService {
         }
 
         System.out.println("📺 EPG terminé: " + successCount + " réussis, " + errorCount + " erreurs");
-    }
 
-    /**
-     * Fallback intelligent : Parse le M3U et sépare par type
-     */
-    public ContentSyncResult syncFromM3UWithIntelligentSeparation() {
-        String m3uUrl = xtreamConfig.getM3uUrl();
-
-        ContentSyncResult result = new ContentSyncResult();
-
-        try {
-            System.out.println("🔄 Parsing intelligent du fichier M3U...");
-
-            List<M3UFallbackService.ContentItem> items = m3uFallbackService
-                    .fetchM3UContent(m3uUrl)
-                    .collectList()
-                    .block();
-
-            if (items == null) items = new ArrayList<>();
-
-            // Sépare intelligemment par type
-            Map<M3UFallbackService.ContentType, List<M3UFallbackService.ContentItem>> grouped =
-                    items.stream().collect(Collectors.groupingBy(M3UFallbackService.ContentItem::getType));
-
-            // Convertit et sauvegarde via vos services existants
-            List<Map<String, Object>> liveStreams = convertAndSaveLiveStreams(
-                    grouped.getOrDefault(M3UFallbackService.ContentType.LIVE_STREAM, new ArrayList<>()));
-
-            List<Map<String, Object>> vodContent = convertAndSaveVod(
-                    grouped.getOrDefault(M3UFallbackService.ContentType.VOD, new ArrayList<>()));
-
-            List<Map<String, Object>> series = convertAndSaveSeries(
-                    grouped.getOrDefault(M3UFallbackService.ContentType.SERIES, new ArrayList<>()));
-
-            result.addLiveStreams(liveStreams);
-            result.addVodContent(vodContent);
-            result.addSeries(series);
-
-            // Synchronise les EPG pour les live streams du M3U
-            if (!liveStreams.isEmpty()) {
-                syncEpgForM3UStreams(liveStreams);
-            }
-
-            System.out.println("📊 Parsing M3U terminé :");
-            System.out.println("  - Live Streams: " + liveStreams.size());
-            System.out.println("  - VOD: " + vodContent.size());
-            System.out.println("  - Séries: " + series.size());
-
-        } catch (Exception ex) {
-            throw new RuntimeException("Impossible de parser le M3U intelligemment", ex);
+        if (liveStreams.size() > maxStreamsToSync) {
+            System.out.println("⚠ Limité à " + maxStreamsToSync + " streams sur " + liveStreams.size() + " disponibles");
         }
-
-        return result;
     }
 
     /**
-     * Convertit les ContentItem en Live Streams et les sauvegarde
+     * Synchronise l'EPG pour un stream spécifique
      */
-    private List<Map<String, Object>> convertAndSaveLiveStreams(List<M3UFallbackService.ContentItem> items) {
-        List<Map<String, Object>> streams = items.stream().map(item -> {
-            Map<String, Object> stream = new HashMap<>();
-            stream.put("stream_id", generateStreamId(item.getUrl()));
-            stream.put("name", item.getName());
-            stream.put("stream_url", item.getUrl());
-            stream.put("stream_icon", item.getTvgLogo());
-            stream.put("category_name", item.getGroupTitle() != null ? item.getGroupTitle() : "Live TV");
-            stream.put("category_id", getCategoryId(item.getGroupTitle()));
-            stream.put("tvg_id", item.getTvgId());
-            stream.put("country", item.getTvgCountry());
-            stream.put("language", item.getTvgLanguage());
-            return stream;
-        }).collect(Collectors.toList());
-
-        // Sauvegarde via votre service existant
-        liveStreamService.saveLiveStreams(streams);
-
-        return streams;
-    }
-
-    /**
-     * Convertit les ContentItem en VOD et les sauvegarde
-     */
-    private List<Map<String, Object>> convertAndSaveVod(List<M3UFallbackService.ContentItem> items) {
-        List<Map<String, Object>> vods = items.stream().map(item -> {
-            Map<String, Object> vod = new HashMap<>();
-            vod.put("stream_id", generateStreamId(item.getUrl()));
-            vod.put("name", item.getName());
-            vod.put("stream_url", item.getUrl());
-            vod.put("stream_icon", item.getTvgLogo());
-            vod.put("category_name", item.getGroupTitle() != null ? item.getGroupTitle() : "Movies");
-            vod.put("category_id", getCategoryId(item.getGroupTitle()));
-            return vod;
-        }).collect(Collectors.toList());
-
-        // Sauvegarde via votre service existant
-        vodService.saveVodStreams(vods);
-
-        return vods;
-    }
-
-    /**
-     * Convertit les ContentItem en Séries et les sauvegarde
-     */
-    private List<Map<String, Object>> convertAndSaveSeries(List<M3UFallbackService.ContentItem> items) {
-        List<Map<String, Object>> series = items.stream().map(item -> {
-            Map<String, Object> serie = new HashMap<>();
-            serie.put("series_id", generateStreamId(item.getUrl()));
-            serie.put("name", item.getName());
-            serie.put("stream_url", item.getUrl());
-            serie.put("stream_icon", item.getTvgLogo());
-            serie.put("category_name", item.getGroupTitle() != null ? item.getGroupTitle() : "TV Series");
-            serie.put("category_id", getCategoryId(item.getGroupTitle()));
-            return serie;
-        }).collect(Collectors.toList());
-
-        // Sauvegarde via votre service existant
-        seriesService.saveSeriesStreams(series);
-
-        return series;
-    }
-
-    /**
-     * Synchronise les EPG spécifiquement pour les streams venant du M3U
-     * (Plus complexe car les IDs peuvent être différents)
-     */
-    private void syncEpgForM3UStreams(List<Map<String, Object>> liveStreams) {
-        System.out.println("📺 Tentative de synchronisation EPG pour streams M3U...");
-
-        // Pour les streams M3U, on essaie de trouver les EPG en utilisant les TVG-ID
-        int attempted = 0;
-        int successful = 0;
-
-        for (Map<String, Object> stream : liveStreams) {
-            try {
-                Integer streamId = parseIntSafely(stream.get("stream_id"));
-                String tvgId = (String) stream.get("tvg_id");
-
-                if (streamId != null && streamId > 0) {
-                    attempted++;
-
-                    // Essaie de récupérer l'EPG avec l'ID généré
-                    List<Map<String, Object>> epgData = epgService.fetchEpgForStream(streamId);
-
-                    if (epgData != null && !epgData.isEmpty()) {
-                        epgService.saveEpgForStream(streamId, epgData);
-                        successful++;
-                    }
-                }
-
-                // Limite pour éviter de surcharger l'API
-                if (attempted >= 100) {
-                    System.out.println("⚠ Limite de 100 tentatives EPG atteinte pour les streams M3U");
-                    break;
-                }
-
-            } catch (Exception e) {
-                // Continue silencieusement car les EPG M3U sont souvent indisponibles
-            }
-        }
-
-        System.out.println("📺 EPG M3U: " + successful + " réussis sur " + attempted + " tentatives");
-    }
-
-    /**
-     * Synchronise uniquement les EPG pour un stream spécifique
-     */
-    public Map<String, Object> syncEpgForSingleStream(Integer streamId) {
+    public Map<String, Object> syncEpgForSingleStream(String userId, Integer streamId) {
         try {
-            List<Map<String, Object>> epgData = epgService.fetchEpgForStream(streamId);
-            epgService.saveEpgForStream(streamId, epgData);
+            EpgService.EpgSyncResult result = epgService.syncEpgForStreamForUser(userId, streamId);
 
             return Map.of(
-                    "message", "✅ EPG synchronisé pour le stream " + streamId,
-                    "stream_id", streamId,
-                    "epg_count", epgData != null ? epgData.size() : 0
+                    "success", true,
+                    "message", result.getMessage(),
+                    "stream_id", result.getStreamId(),
+                    "epg_count", result.getEntriesCount()
             );
 
         } catch (Exception e) {
             return Map.of(
+                    "success", false,
                     "error", "❌ Erreur sync EPG pour stream " + streamId,
                     "details", e.getMessage()
             );
@@ -319,27 +169,29 @@ public class IntegratedContentSyncService {
     }
 
     /**
-     * Obtient des statistiques complètes
+     * Obtient des statistiques complètes pour un utilisateur
      */
-    public Map<String, Object> getComprehensiveStats() {
+    public Map<String, Object> getComprehensiveStatsForUser(String userId) {
         Map<String, Object> stats = new HashMap<>();
 
         try {
-            // TODO: Ajouter des méthodes count() dans vos repositories
             stats.put("message", "📊 Statistiques complètes du contenu");
+            stats.put("user_id", userId);
+            stats.put("has_xtream_config", userContextService.hasValidXtreamConfig(userId));
+
             stats.put("services_status", Map.of(
                     "live_stream_service", "✅ Actif",
                     "vod_service", "✅ Actif",
                     "series_service", "✅ Actif",
-                    "epg_service", "✅ Actif",
-                    "m3u_fallback", "✅ Actif"
+                    "epg_service", "✅ Actif"
             ));
 
             stats.put("data_sources", Map.of(
-                    "primary", "Xtream Codes API",
+                    "primary", "Xtream Codes API (utilisateur)",
                     "fallback", "M3U Parsing avec classification intelligente"
             ));
 
+            // Vous pouvez ajouter des compteurs ici si vous avez des repositories avec count()
             // stats.put("counts", Map.of(
             //     "live_streams", liveStreamRepository.count(),
             //     "vod_content", vodRepository.count(),
@@ -349,12 +201,47 @@ public class IntegratedContentSyncService {
 
         } catch (Exception e) {
             stats.put("error", "Erreur lors de la récupération des statistiques");
+            stats.put("details", e.getMessage());
         }
 
         return stats;
     }
 
-    // Méthodes utilitaires
+    /**
+     * Synchronise seulement les Live Streams (méthode rapide)
+     */
+    public ContentSyncResult syncLiveStreamsOnly(String userId) {
+        ContentSyncResult result = new ContentSyncResult();
+        result.addLiveStreams(syncLiveStreamsForUser(userId));
+        return result;
+    }
+
+    /**
+     * Synchronise seulement les VOD (méthode rapide)
+     */
+    public ContentSyncResult syncVodOnly(String userId) {
+        ContentSyncResult result = new ContentSyncResult();
+        result.addVodContent(syncVodForUser(userId));
+        return result;
+    }
+
+    /**
+     * Synchronise seulement les Séries (méthode rapide)
+     */
+    public ContentSyncResult syncSeriesOnly(String userId) {
+        ContentSyncResult result = new ContentSyncResult();
+        result.addSeries(syncSeriesForUser(userId));
+        return result;
+    }
+
+    /**
+     * Vérifie si un utilisateur peut synchroniser du contenu
+     */
+    public boolean canUserSync(String userId) {
+        return userContextService.hasValidXtreamConfig(userId);
+    }
+
+    // Méthode utilitaire
     private Integer parseIntSafely(Object value) {
         if (value == null) return null;
         try {
@@ -362,15 +249,6 @@ public class IntegratedContentSyncService {
         } catch (NumberFormatException e) {
             return null;
         }
-    }
-
-    private int generateStreamId(String url) {
-        return Math.abs(url.hashCode());
-    }
-
-    private int getCategoryId(String groupTitle) {
-        if (groupTitle == null) return 0;
-        return Math.abs(groupTitle.hashCode()) % 1000;
     }
 
     /**

@@ -12,6 +12,12 @@ import jakarta.validation.constraints.*;
 /**
  * DTO pour la requête d'inscription
  */
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import jakarta.validation.constraints.*;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -26,16 +32,20 @@ public class RegisterRequest {
     @Size(min = 6, message = "Le mot de passe doit contenir au moins 6 caractères")
     private String password;
 
-    @NotBlank(message = "Le nom est obligatoire")
-    @Size(min = 2, max = 50, message = "Le nom doit contenir entre 2 et 50 caractères")
+
     private String nom;
 
     @NotBlank(message = "Le prénom est obligatoire")
     @Size(min = 2, max = 50, message = "Le prénom doit contenir entre 2 et 50 caractères")
     private String prenom;
-
-    @Size(max = 20, message = "Le numéro de téléphone ne peut pas dépasser 20 caractères")
     private String telephone;
+
+    @NotBlank(message = "xtreamBaseUrl est obligatoire")
+    private String xtreamBaseUrl;
+    @NotBlank(message = "xtreamUsername est obligatoire")
+    private String xtreamUsername;
+    @NotBlank(message = "xtreamPassword est obligatoire")
+    private String xtreamPassword;
 }
 
 

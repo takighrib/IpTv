@@ -18,15 +18,23 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Optional;
 
+import org.springframework.context.annotation.Lazy;
+
+
 /**
  * Filtre pour intercepter et valider les tokens JWT dans les requêtes
  */
 @Component
-@RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
     private final CompteService compteService;
+
+    // ✅ SOLUTION : Injection Lazy pour casser la dépendance circulaire
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, @Lazy CompteService compteService) {
+        this.jwtUtil = jwtUtil;
+        this.compteService = compteService;
+    }
 
     @Override
     protected void doFilterInternal(
@@ -50,6 +58,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // Valide le token
             if (!jwtUtil.validateToken(jwt)) {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.setContentType("application/json");
                 response.getWriter().write("{\"error\": \"Token invalide ou expiré\"}");
                 return;
             }
@@ -69,6 +78,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // Vérifie si le compte est actif
                     if (!compte.isActive()) {
                         response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        response.setContentType("application/json");
                         response.getWriter().write("{\"error\": \"Compte désactivé\"}");
                         return;
                     }
@@ -76,6 +86,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     // Vérifie si le compte est expiré (pour les comptes payants)
                     if (compte.isExpired()) {
                         response.setStatus(HttpServletResponse.SC_PAYMENT_REQUIRED);
+                        response.setContentType("application/json");
                         response.getWriter().write("{\"error\": \"Abonnement expiré\"}");
                         return;
                     }
@@ -98,6 +109,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         } catch (Exception e) {
             logger.error("Erreur lors de l'authentification JWT: " + e.getMessage());
             response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType("application/json");
             response.getWriter().write("{\"error\": \"Erreur d'authentification\"}");
             return;
         }
@@ -115,15 +127,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         // Ne pas appliquer le filtre aux endpoints publics
         return path.startsWith("/api/auth/") ||
-                path.startsWith("/sync/") ||
-                path.startsWith("/epg/") ||
-                path.startsWith("/series/") ||
-                path.startsWith("/vod/") ||
-                path.contains("/api/comptes/url/") ||
                 path.startsWith("/actuator/") ||
                 path.startsWith("/v3/api-docs") ||
                 path.startsWith("/swagger-ui");
     }
 }
-
-

@@ -1,15 +1,14 @@
 package com.example.demo.service;
 
-import com.example.demo.config.XtreamConfig;
 import com.example.demo.model.LiveStream;
 import com.example.demo.repository.LiveStreamRepository;
 import com.example.demo.utils.StreamUtils;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 
 import java.util.*;
+import com.example.demo.config.UserXtreamConfig;
 
 @Service
 @RequiredArgsConstructor
@@ -17,36 +16,56 @@ public class LiveStreamService {
 
     private final LiveStreamRepository liveStreamRepository;
     private final WebClient webClient;
-    private final XtreamConfig xtreamConfig;
+    private final UserContextService userContextService;
 
     /**
-     * Récupère la liste des streams depuis l'API Xtream.
-     * Si erreur -> fallback vers le fichier M3U.
+     * Récupère les live streams pour un utilisateur spécifique
      */
-    public List<Map<String, Object>> fetchLiveStreamsFromXtream() {
+    public List<Map<String, Object>> fetchLiveStreamsForUser(String userId) {
+        // Récupérer la config Xtream de l'utilisateur
+        UserXtreamConfig config = userContextService.getUserXtreamConfigOrThrow(userId);
+
+        return fetchLiveStreamsFromXtream(config);
+    }
+
+    /**
+     * Récupère la liste des streams depuis l'API Xtream avec une config spécifique
+     */
+    private List<Map<String, Object>> fetchLiveStreamsFromXtream(UserXtreamConfig config) {
         try {
             List<Map<String, Object>> streams = webClient.get()
-                    .uri(xtreamConfig.getLiveStreamsUrl())
+                    .uri(config.getLiveStreamsUrl())
                     .retrieve()
                     .bodyToMono(List.class)
                     .block();
 
             System.out.println("✅ Récupéré " + (streams != null ? streams.size() : 0) + " live streams depuis Xtream API");
+
+            // ✅ Ajouter l'URL de streaming complète
+            if (streams != null) {
+                for (Map<String, Object> stream : streams) {
+                    Integer streamId = StreamUtils.parseIntOrZero(stream.get("stream_id"));
+                    if (streamId > 0) {
+                        stream.put("stream_url", config.getLiveStreamUrl(streamId));
+                    }
+                }
+            }
+
             return streams != null ? streams : new ArrayList<>();
 
         } catch (Exception e) {
             System.err.println("❌ Erreur API Live Streams : " + e.getMessage());
-            return fetchFromM3U();
+            return fetchFromM3U(config);
         }
     }
 
     /**
-     * Fallback vers l'API M3U (get.php)
+     * Fallback vers l'API M3U
      */
-    public List<Map<String, Object>> fetchFromM3U() {
+    private List<Map<String, Object>> fetchFromM3U(UserXtreamConfig config) {
         try {
             String m3uContent = webClient.get()
-                    .uri(xtreamConfig.getM3uUrl())
+                    .uri(config.getM3uUrl())
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -69,21 +88,17 @@ public class LiveStreamService {
 
         for (String line : lines) {
             if (line.startsWith("#EXTINF:")) {
-                // Vérifie si c'est un live stream avant de créer l'objet
                 if (isLiveStream(line)) {
                     currentStream = new HashMap<>();
                     String[] parts = line.split(",", 2);
                     if (parts.length == 2) {
                         currentStream.put("name", parts[1].trim());
                     }
-
-                    // Extrait les métadonnées
                     extractM3UMetadata(line, currentStream);
                 } else {
-                    currentStream = null; // Ignore les non-live streams
+                    currentStream = null;
                 }
             } else if (line.startsWith("http") && currentStream != null) {
-                // Double vérification au niveau de l'URL
                 if (isValidLiveStreamUrl(line.trim())) {
                     currentStream.put("stream_url", line.trim());
                     currentStream.put("stream_id", StreamUtils.generateStreamId(line.trim()));
@@ -103,23 +118,18 @@ public class LiveStreamService {
      * Extrait les métadonnées du M3U
      */
     private void extractM3UMetadata(String extinf, Map<String, Object> stream) {
-        // tvg-id
         String tvgId = StreamUtils.extractAttribute(extinf, "tvg-id");
         if (tvgId != null) stream.put("tvg_id", tvgId);
 
-        // tvg-logo
         String tvgLogo = StreamUtils.extractAttribute(extinf, "tvg-logo");
         if (tvgLogo != null) stream.put("stream_icon", tvgLogo);
 
-        // group-title
         String groupTitle = StreamUtils.extractAttribute(extinf, "group-title");
         if (groupTitle != null) stream.put("group_title", groupTitle);
 
-        // tvg-country
         String country = StreamUtils.extractAttribute(extinf, "tvg-country");
         if (country != null) stream.put("country", country);
 
-        // tvg-language
         String language = StreamUtils.extractAttribute(extinf, "tvg-language");
         if (language != null) stream.put("language", language);
     }
@@ -132,7 +142,6 @@ public class LiveStreamService {
 
         String line = extinf.toLowerCase();
 
-        // Patterns indiquant des VOD/Séries à exclure
         String[] vodPatterns = {
                 "group-title=\"movies\"", "group-title=\"vod\"",
                 "group-title=\"series\"", "group-title=\"tv shows\"",
@@ -147,7 +156,7 @@ public class LiveStreamService {
             }
         }
 
-        return true; // Par défaut, considère comme live stream
+        return true;
     }
 
     /**
@@ -160,7 +169,6 @@ public class LiveStreamService {
 
         String lowerUrl = url.toLowerCase();
 
-        // Extensions de fichiers vidéo (VOD)
         String[] videoExtensions = {
                 ".mp4", ".mkv", ".avi", ".mov", ".wmv",
                 ".flv", ".webm", ".m4v", ".3gp"
@@ -176,12 +184,9 @@ public class LiveStreamService {
     }
 
     /**
-     * Sauvegarde en DB avec UPSERT (évite les doublons)
+     * Sauvegarde en DB avec association à l'utilisateur
      */
-    /**
-     * Sauvegarde en DB avec UPSERT (évite les doublons)
-     */
-    public void saveLiveStreams(List<Map<String, Object>> streams) {
+    public void saveLiveStreamsForUser(String userId, List<Map<String, Object>> streams) {
         if (streams == null || streams.isEmpty()) {
             System.out.println("⚠ Aucun live stream à sauvegarder");
             return;
@@ -213,21 +218,10 @@ public class LiveStreamService {
                 liveStream.setCategoryId(StreamUtils.parseIntOrZero(s.get("category_id")));
                 liveStream.setCategoryName(StreamUtils.getStringSafely(s, "category_name", "category_id"));
                 liveStream.setStreamIcon(StreamUtils.getStringSafely(s, "stream_icon"));
-
-                // Construire l'URL si elle n'existe pas
-                String streamUrl = StreamUtils.getStringSafely(s, "stream_url");
-                if (streamUrl.isEmpty()) {
-                    // Construire l'URL du live stream
-                    streamUrl = xtreamConfig.getBaseUrl() + "/"
-                            + xtreamConfig.getUsername() + "/"
-                            + xtreamConfig.getPassword() + "/"
-                            + streamId;
-                }
-                liveStream.setStreamUrl(streamUrl);
+                liveStream.setStreamUrl(StreamUtils.getStringSafely(s, "stream_url"));
 
                 // Validation avant sauvegarde
                 if (liveStream.getName() != null && !liveStream.getName().isEmpty()) {
-
                     liveStreamRepository.save(liveStream);
 
                     if (isNew) {
@@ -245,40 +239,40 @@ public class LiveStreamService {
             }
         }
 
-        System.out.println("✅ Live Streams: " + createdCount + " créés, " + updatedCount + " mis à jour, " + errorCount + " erreurs");
+        System.out.println("✅ Live Streams pour user " + userId + ": " + createdCount + " créés, " + updatedCount + " mis à jour, " + errorCount + " erreurs");
     }
+
+    /**
+     * Synchronise et sauvegarde les live streams pour un utilisateur
+     */
+    public List<Map<String, Object>> syncAndSaveLiveStreamsForUser(String userId) {
+        List<Map<String, Object>> streams = fetchLiveStreamsForUser(userId);
+
+        if (streams.size() > 1000) {
+            saveLiveStreamsBatchForUser(userId, streams, 100);
+        } else {
+            saveLiveStreamsForUser(userId, streams);
+        }
+
+        return streams;
+    }
+
     /**
      * Sauvegarde optimisée en lot pour de gros volumes
      */
-    public void saveLiveStreamsBatch(List<Map<String, Object>> streams, int batchSize) {
+    private void saveLiveStreamsBatchForUser(String userId, List<Map<String, Object>> streams, int batchSize) {
         if (streams == null || streams.isEmpty()) {
             System.out.println("⚠ Aucun live stream à sauvegarder");
             return;
         }
 
-        // Traitement par batch pour éviter les problèmes de mémoire
         for (int i = 0; i < streams.size(); i += batchSize) {
             int endIndex = Math.min(i + batchSize, streams.size());
             List<Map<String, Object>> batch = streams.subList(i, endIndex);
 
             System.out.println("📦 Traitement du lot " + (i / batchSize + 1) + " (" + batch.size() + " live streams)");
-            saveLiveStreams(batch);
+            saveLiveStreamsForUser(userId, batch);
         }
-    }
-
-    /**
-     * Récupère les live streams avec flux réactif
-     */
-    public Flux<Map<String, Object>> fetchLiveStreamsReactive() {
-        return webClient.get()
-                .uri(xtreamConfig.getLiveStreamsUrl())
-                .retrieve()
-                .bodyToFlux(List.class)
-                .flatMapIterable(list -> (List<Map<String, Object>>) list)
-                .onErrorResume(throwable -> {
-                    System.err.println("❌ Erreur flux réactif, fallback M3U: " + throwable.getMessage());
-                    return Flux.fromIterable(fetchFromM3U());
-                });
     }
 
     /**
@@ -299,21 +293,5 @@ public class LiveStreamService {
             return new ArrayList<>();
         }
         return liveStreamRepository.findByCategoryName(categoryName.trim());
-    }
-
-    /**
-     * Méthode pratique pour synchroniser et sauvegarder
-     */
-    public List<Map<String, Object>> syncAndSaveLiveStreams() {
-        List<Map<String, Object>> streams = fetchLiveStreamsFromXtream();
-
-        // Utilise la sauvegarde par batch pour de gros volumes
-        if (streams.size() > 1000) {
-            saveLiveStreamsBatch(streams, 100);
-        } else {
-            saveLiveStreams(streams);
-        }
-
-        return streams;
     }
 }

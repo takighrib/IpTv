@@ -12,7 +12,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -24,28 +23,26 @@ public class Compte {
 
     @Indexed(unique = true)
     private String email;
-
-    private String password; // Hash du mot de passe
+    private String password;
 
     @Indexed(unique = true)
-    private String url; // URL unique pour chaque utilisateur
+    private String url; // URL unique du profil utilisateur
 
-    private String status; // "PAYANT" ou "NON_PAYANT"
+    // ✅ NOUVEAUX CHAMPS - Credentials Xtream de l'utilisateur
+    private String xtreamBaseUrl;    // Ex: http://buysmart.tn:8080
+    private String xtreamUsername;   // Ex: buysmart01370
+    private String xtreamPassword;   // Ex: 0731brd
 
+    private String status;
     private List<Favori> favoris = new ArrayList<>();
-
     private String nom;
     private String prenom;
     private String telephone;
-
     private LocalDateTime dateCreation = LocalDateTime.now();
-    private LocalDateTime dateExpiration; // Pour les comptes payants
-
+    private LocalDateTime dateExpiration;
     private boolean isActive = true;
-
-    // Informations supplémentaires
-    private String googleId; // Pour OAuth Google
-    private String provider = "LOCAL"; // "LOCAL" ou "GOOGLE"
+    private String googleId;
+    private String provider = "LOCAL";
 
     // Constructeur pour génération automatique d'URL unique
     public Compte(String email, String password) {
@@ -57,12 +54,10 @@ public class Compte {
         this.provider = "LOCAL";
     }
 
-    // Génération d'URL unique
     private String generateUniqueUrl() {
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    // Méthode pour ajouter un favori
     public void ajouterFavori(String idContenu, String nomContenu, String type) {
         Favori favori = new Favori(idContenu, nomContenu, type);
         if (!favoris.contains(favori)) {
@@ -70,12 +65,10 @@ public class Compte {
         }
     }
 
-    // Méthode pour retirer un favori
     public void retirerFavori(String idContenu) {
         favoris.removeIf(f -> f.getIdContenu().equals(idContenu));
     }
 
-    // Vérifier si le compte est expiré
     public boolean isExpired() {
         if ("NON_PAYANT".equals(status)) {
             return false;
@@ -83,13 +76,18 @@ public class Compte {
         return dateExpiration != null && LocalDateTime.now().isAfter(dateExpiration);
     }
 
-    // Vérifier si le compte est payant
     public boolean isPayant() {
         return "PAYANT".equals(status);
     }
 
-    // Vérifier si c'est un compte Google
     public boolean isGoogleAccount() {
         return "GOOGLE".equals(provider);
+    }
+
+    // ✅ NOUVELLE MÉTHODE - Vérifier si l'utilisateur a configuré Xtream
+    public boolean hasXtreamConfig() {
+        return xtreamBaseUrl != null && !xtreamBaseUrl.isEmpty()
+                && xtreamUsername != null && !xtreamUsername.isEmpty()
+                && xtreamPassword != null && !xtreamPassword.isEmpty();
     }
 }

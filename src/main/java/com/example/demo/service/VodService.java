@@ -1,6 +1,6 @@
 package com.example.demo.service;
 
-import com.example.demo.config.XtreamConfig;
+import com.example.demo.config.UserXtreamConfig;
 import com.example.demo.model.Vod;
 import com.example.demo.repository.VodRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,35 +18,55 @@ public class VodService {
 
     private final VodRepository vodRepository;
     private final WebClient webClient;
-    private final XtreamConfig xtreamConfig;
+    private final UserContextService userContextService;
+
+    /**
+     * Récupère les VOD pour un utilisateur spécifique
+     */
+    public List<Map<String, Object>> fetchVodStreamsForUser(String userId) {
+        UserXtreamConfig config = userContextService.getUserXtreamConfigOrThrow(userId);
+        return fetchVodStreams(config);
+    }
 
     /**
      * Récupère la liste des VOD depuis l'API Xtream
      */
-    public List<Map<String, Object>> fetchVodStreams() {
+    private List<Map<String, Object>> fetchVodStreams(UserXtreamConfig config) {
         try {
             List<Map<String, Object>> vods = webClient.get()
-                    .uri(xtreamConfig.getVodStreamsUrl())
+                    .uri(config.getVodStreamsUrl())
                     .retrieve()
                     .bodyToMono(List.class)
                     .block();
 
             System.out.println("✅ Récupéré " + (vods != null ? vods.size() : 0) + " VOD depuis Xtream API");
+
+            // ✅ Ajouter l'URL de streaming complète
+            if (vods != null) {
+                for (Map<String, Object> vod : vods) {
+                    Integer vodId = parseIntSafely(vod.get("stream_id"));
+                    String extension = getStringSafely(vod, "container_extension");
+                    if (vodId > 0 && !extension.isEmpty()) {
+                        vod.put("stream_url", config.getVodStreamUrl(vodId, extension));
+                    }
+                }
+            }
+
             return vods != null ? vods : new ArrayList<>();
 
         } catch (Exception e) {
             System.err.println("❌ Erreur API VOD : " + e.getMessage());
-            return fetchVodFromM3U();
+            return fetchVodFromM3U(config);
         }
     }
 
     /**
      * Fallback pour récupérer les VOD depuis le M3U
      */
-    public List<Map<String, Object>> fetchVodFromM3U() {
+    private List<Map<String, Object>> fetchVodFromM3U(UserXtreamConfig config) {
         try {
             String m3uContent = webClient.get()
-                    .uri(xtreamConfig.getM3uUrl())
+                    .uri(config.getM3uUrl())
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -278,7 +298,6 @@ public class VodService {
                         .categoryName(getStringSafely(s, "category_name"))
                         .streamUrl(getStringSafely(s, "stream_url"))
                         .streamIcon(getStringSafely(s, "stream_icon"))
-
                         .build();
 
                 // Validation avant sauvegarde
@@ -317,27 +336,28 @@ public class VodService {
     }
 
     /**
-     * Flux réactif pour les VOD
+     * Synchronise et sauvegarde les VOD pour un utilisateur
      */
-    public Flux<Map<String, Object>> fetchVodStreamsReactive() {
-        return webClient.get()
-                .uri(xtreamConfig.getVodStreamsUrl())
-                .retrieve()
-                .bodyToFlux(List.class)
-                .flatMapIterable(list -> (List<Map<String, Object>>) list)
-                .onErrorResume(throwable -> {
-                    System.err.println("❌ Erreur flux réactif VOD, fallback M3U: " + throwable.getMessage());
-                    return Flux.fromIterable(fetchVodFromM3U());
-                });
+    public List<Map<String, Object>> syncAndSaveVodStreamsForUser(String userId) {
+        List<Map<String, Object>> streams = fetchVodStreamsForUser(userId);
+
+        if (streams.size() > 1000) {
+            saveVodStreamsBatch(streams, 100);
+        } else {
+            saveVodStreams(streams);
+        }
+
+        return streams;
     }
 
     /**
      * Recherche de VOD par titre
      */
     public List<Vod> searchVodByTitle(String searchTerm) {
-        // TODO: Implémenter dans le repository
-        // return vodRepository.findByNameContainingIgnoreCase(searchTerm);
-        return new ArrayList<>();
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return vodRepository.findByNameContainingIgnoreCase(searchTerm.trim());
     }
 
     /**
@@ -356,22 +376,6 @@ public class VodService {
         // TODO: Implémenter dans le repository
         // return vodRepository.findByGenre(genre);
         return new ArrayList<>();
-    }
-
-    /**
-     * Méthode pratique pour synchroniser et sauvegarder
-     */
-    public List<Map<String, Object>> syncAndSaveVodStreams() {
-        List<Map<String, Object>> streams = fetchVodStreams();
-
-        // Utilise la sauvegarde par batch pour de gros volumes
-        if (streams.size() > 1000) {
-            saveVodStreamsBatch(streams, 100);
-        } else {
-            saveVodStreams(streams);
-        }
-
-        return streams;
     }
 
     // Méthodes utilitaires

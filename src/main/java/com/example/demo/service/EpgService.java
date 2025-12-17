@@ -1,6 +1,6 @@
 package com.example.demo.service;
 
-import com.example.demo.config.XtreamConfig;
+import com.example.demo.config.UserXtreamConfig;
 import com.example.demo.model.Epg;
 import com.example.demo.repository.EpgRepository;
 import lombok.RequiredArgsConstructor;
@@ -10,10 +10,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -21,15 +18,23 @@ public class EpgService {
 
     private final EpgRepository epgRepository;
     private final WebClient webClient;
-    private final XtreamConfig xtreamConfig;
+    private final UserContextService userContextService;
+
+    /**
+     * Récupère l'EPG pour un stream spécifique pour un utilisateur
+     */
+    public List<Map<String, Object>> fetchEpgForStreamForUser(String userId, Integer streamId) {
+        UserXtreamConfig config = userContextService.getUserXtreamConfigOrThrow(userId);
+        return fetchEpgForStream(config, streamId);
+    }
 
     /**
      * Récupère l'EPG pour un stream spécifique
      */
-    public List<Map<String, Object>> fetchEpgForStream(Integer streamId) {
+    private List<Map<String, Object>> fetchEpgForStream(UserXtreamConfig config, Integer streamId) {
         try {
             List<Map<String, Object>> response = webClient.get()
-                    .uri(xtreamConfig.getEpgUrl(streamId))
+                    .uri(config.getEpgUrl(streamId))
                     .retrieve()
                     .bodyToMono(List.class)
                     .block();
@@ -45,12 +50,20 @@ public class EpgService {
     }
 
     /**
+     * Récupère l'EPG complet pour un utilisateur
+     */
+    public List<Map<String, Object>> fetchFullEpgForUser(String userId) {
+        UserXtreamConfig config = userContextService.getUserXtreamConfigOrThrow(userId);
+        return fetchFullEpg(config);
+    }
+
+    /**
      * Récupère l'EPG complet pour toutes les chaînes
      */
-    public List<Map<String, Object>> fetchFullEpg() {
+    private List<Map<String, Object>> fetchFullEpg(UserXtreamConfig config) {
         try {
             List<Map<String, Object>> response = webClient.get()
-                    .uri(xtreamConfig.getFullEpgUrl())
+                    .uri(config.getFullEpgUrl())
                     .retrieve()
                     .bodyToMono(List.class)
                     .block();
@@ -108,11 +121,11 @@ public class EpgService {
     }
 
     /**
-     * Synchronise l'EPG pour un stream (fetch + save)
+     * Synchronise l'EPG pour un stream pour un utilisateur
      */
-    public EpgSyncResult syncEpgForStream(Integer streamId) {
+    public EpgSyncResult syncEpgForStreamForUser(String userId, Integer streamId) {
         try {
-            List<Map<String, Object>> epgList = fetchEpgForStream(streamId);
+            List<Map<String, Object>> epgList = fetchEpgForStreamForUser(userId, streamId);
 
             if (epgList.isEmpty()) {
                 return new EpgSyncResult(streamId, 0, "Aucune donnée EPG disponible");
@@ -128,9 +141,9 @@ public class EpgService {
     }
 
     /**
-     * Synchronise l'EPG pour plusieurs streams en lot
+     * Synchronise l'EPG pour plusieurs streams en lot pour un utilisateur
      */
-    public List<EpgSyncResult> syncEpgForMultipleStreams(List<Integer> streamIds) {
+    public List<EpgSyncResult> syncEpgForMultipleStreamsForUser(String userId, List<Integer> streamIds) {
         List<EpgSyncResult> results = new ArrayList<>();
 
         System.out.println("📺 Synchronisation EPG pour " + streamIds.size() + " streams...");
@@ -139,7 +152,7 @@ public class EpgService {
             Integer streamId = streamIds.get(i);
 
             try {
-                EpgSyncResult result = syncEpgForStream(streamId);
+                EpgSyncResult result = syncEpgForStreamForUser(userId, streamId);
                 results.add(result);
 
                 // Progression tous les 20 streams

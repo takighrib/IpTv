@@ -35,7 +35,6 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest loginRequest) {
         try {
-            // Vérifier les credentials
             boolean isValid = compteService.verifierCredentials(
                     loginRequest.getEmail(),
                     loginRequest.getPassword()
@@ -49,7 +48,6 @@ public class AuthController {
                         ));
             }
 
-            // Récupérer le compte
             Optional<Compte> compteOpt = compteService.trouverParEmail(loginRequest.getEmail());
             if (compteOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -61,7 +59,6 @@ public class AuthController {
 
             Compte compte = compteOpt.get();
 
-            // Vérifier si le compte est actif
             if (!compte.isActive()) {
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(Map.of(
@@ -70,11 +67,10 @@ public class AuthController {
                         ));
             }
 
-            // Vérifier si le compte est expiré (pour les comptes payants)
             if (compte.isExpired()) {
                 compte.setStatus("NON_PAYANT");
                 compte.setActive(false);
-                compteService.supprimerCompte(compte.getId()); // Met à jour
+                compteService.supprimerCompte(compte.getId());
 
                 return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED)
                         .body(Map.of(
@@ -83,10 +79,8 @@ public class AuthController {
                         ));
             }
 
-            // Générer le JWT token
             String token = jwtUtil.generateToken(compte.getEmail(), compte.getId());
 
-            // Construire la réponse
             AuthResponse response = AuthResponse.builder()
                     .success(true)
                     .message("Connexion réussie")
@@ -100,6 +94,7 @@ public class AuthController {
                     .isPayant(compte.isPayant())
                     .dateExpiration(compte.getDateExpiration())
                     .provider(compte.getProvider())
+                    .hasXtreamConfig(compte.hasXtreamConfig())  // ✅ NOUVEAU
                     .build();
 
             return ResponseEntity.ok(response);
@@ -119,7 +114,6 @@ public class AuthController {
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest registerRequest) {
         try {
-            // Vérifier si l'email existe déjà
             Optional<Compte> existant = compteService.trouverParEmail(registerRequest.getEmail());
             if (existant.isPresent()) {
                 return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -129,23 +123,36 @@ public class AuthController {
                         ));
             }
 
-            // Créer le compte
-            Compte compte = compteService.creerCompte(
-                    registerRequest.getEmail(),
-                    registerRequest.getPassword(),
-                    registerRequest.getNom(),
-                    registerRequest.getPrenom()
-            );
+            Compte compte;
 
-            // Si numéro de téléphone fourni
+            // ✅ NOUVEAU - Vérifier si config Xtream fournie
+            if (registerRequest.getXtreamBaseUrl() != null &&
+                    !registerRequest.getXtreamBaseUrl().isEmpty()) {
+
+                compte = compteService.creerCompteAvecXtream(
+                        registerRequest.getEmail(),
+                        registerRequest.getPassword(),
+                        registerRequest.getNom(),
+                        registerRequest.getPrenom(),
+                        registerRequest.getXtreamBaseUrl(),
+                        registerRequest.getXtreamUsername(),
+                        registerRequest.getXtreamPassword()
+                );
+            } else {
+                compte = compteService.creerCompte(
+                        registerRequest.getEmail(),
+                        registerRequest.getPassword(),
+                        registerRequest.getNom(),
+                        registerRequest.getPrenom()
+                );
+            }
+
             if (registerRequest.getTelephone() != null && !registerRequest.getTelephone().isEmpty()) {
                 compte.setTelephone(registerRequest.getTelephone());
             }
 
-            // Générer le JWT token
             String token = jwtUtil.generateToken(compte.getEmail(), compte.getId());
 
-            // Construire la réponse
             AuthResponse response = AuthResponse.builder()
                     .success(true)
                     .message("Inscription réussie")
@@ -158,6 +165,7 @@ public class AuthController {
                     .status(compte.getStatus())
                     .isPayant(false)
                     .provider("LOCAL")
+                    .hasXtreamConfig(compte.hasXtreamConfig())  // ✅ NOUVEAU
                     .build();
 
             return ResponseEntity.status(HttpStatus.CREATED).body(response);

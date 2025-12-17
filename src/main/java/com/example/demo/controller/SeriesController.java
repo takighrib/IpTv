@@ -8,89 +8,74 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.example.demo.service.SeriesService;
+import com.example.demo.security.JwtUtil;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+import java.util.Map;
+
 @RestController
-@RequestMapping("/series")
+@RequestMapping("/api/series")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*", maxAge = 3600)
 public class SeriesController {
 
     private final SeriesService seriesService;
+    private final JwtUtil jwtUtil;
 
-    /**
-     * Synchronise et sauvegarde les séries
-     * @param forceFallback si true, utilise le fallback M3U
-     */
     @GetMapping("/sync")
-    public Map<String, Object> syncSeries(@RequestParam(defaultValue = "false") boolean forceFallback) {
-        Map<String, Object> response = new HashMap<>();
-
+    public ResponseEntity<?> syncSeries(@RequestHeader("Authorization") String authHeader) {
         try {
-            List<Map<String, Object>> series;
+            String token = authHeader.substring(7);
+            String userId = jwtUtil.extractUserId(token);
 
-            if (forceFallback) {
-                // 🚨 Forcer la récupération via M3U
-                series = seriesService.fetchSeriesFromM3U();
-            } else {
-                // 🌐 Tentative API Xtream avec fallback automatique
-                series = seriesService.fetchSeriesStreams();
-            }
+            List<Map<String, Object>> series = seriesService.syncAndSaveSeriesStreamsForUser(userId);
 
-            // Sauvegarde des séries en base
-            seriesService.saveSeriesStreams(series);
-
-            response.put("message", "✅ Séries synchronisées avec succès");
-            response.put("count", series.size());
-            response.put("series", series);
-            response.put("status", "success");
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "message", "✅ Séries synchronisées",
+                    "count", series.size(),
+                    "series", series
+            ));
 
         } catch (Exception e) {
-            e.printStackTrace();
-            response.put("message", "❌ Erreur lors de la synchronisation des séries");
-            response.put("error", e.getMessage());
-            response.put("status", "failed");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "❌ Erreur: " + e.getMessage()
+            ));
         }
-
-        return response;
     }
 
-    /**
-     * Recherche des séries par nom
-     */
     @GetMapping("/search")
-    public Map<String, Object> searchSeries(@RequestParam String name) {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<?> searchSeries(@RequestParam String name) {
         try {
-            List<?> results = seriesService.searchSeriesByName(name);
-            response.put("message", "Résultats trouvés pour: " + name);
-            response.put("count", results.size());
-            response.put("results", results);
-            response.put("status", "success");
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "results", seriesService.searchSeriesByName(name)
+            ));
         } catch (Exception e) {
-            e.printStackTrace();
-            response.put("message", "❌ Erreur lors de la recherche");
-            response.put("error", e.getMessage());
-            response.put("status", "failed");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "❌ Erreur: " + e.getMessage()
+            ));
         }
-        return response;
     }
 
-    /**
-     * Obtenir tous les noms de séries
-     */
     @GetMapping("/all-names")
-    public Map<String, Object> getAllSeriesNames() {
-        Map<String, Object> response = new HashMap<>();
+    public ResponseEntity<?> getAllSeriesNames() {
         try {
-            List<String> names = seriesService.getAllSeriesNames();
-            response.put("message", "Liste de toutes les séries");
-            response.put("count", names.size());
-            response.put("seriesNames", names);
-            response.put("status", "success");
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "seriesNames", seriesService.getAllSeriesNames()
+            ));
         } catch (Exception e) {
-            e.printStackTrace();
-            response.put("message", "❌ Erreur lors de la récupération des séries");
-            response.put("error", e.getMessage());
-            response.put("status", "failed");
+            return ResponseEntity.badRequest().body(Map.of(
+                    "success", false,
+                    "message", "❌ Erreur: " + e.getMessage()
+            ));
         }
-        return response;
     }
 }

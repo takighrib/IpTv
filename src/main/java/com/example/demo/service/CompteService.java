@@ -12,13 +12,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-
 @Service
+@RequiredArgsConstructor  // ✅ Injection par constructeur
 public class CompteService {
 
-    @Autowired
-    private CompteRepository compteRepository;
-    private  PasswordEncoder passwordEncoder;
+    private final CompteRepository compteRepository;
+    private final PasswordEncoder passwordEncoder;
 
     // Créer un compte
     public Compte creerCompte(String email, String password, String nom, String prenom) {
@@ -34,6 +33,55 @@ public class CompteService {
         compte.setUrl(generateUniqueUrl());
         compte.setStatus("NON_PAYANT");
         compte.setProvider("LOCAL");
+
+        return compteRepository.save(compte);
+    }
+
+    // ✅ NOUVELLE MÉTHODE - Créer un compte avec config Xtream
+    public Compte creerCompteAvecXtream(String email, String password, String nom, String prenom,
+                                        String xtreamBaseUrl, String xtreamUsername, String xtreamPassword) {
+        if (compteRepository.existsByEmail(email)) {
+            throw new RuntimeException("Email déjà utilisé");
+        }
+
+        Compte compte = new Compte();
+        compte.setEmail(email);
+        compte.setPassword(passwordEncoder.encode(password));
+        compte.setNom(nom);
+        compte.setPrenom(prenom);
+        compte.setUrl(generateUniqueUrl());
+        compte.setStatus("NON_PAYANT");
+        compte.setProvider("LOCAL");
+
+        // Configuration Xtream
+        compte.setXtreamBaseUrl(xtreamBaseUrl);
+        compte.setXtreamUsername(xtreamUsername);
+        compte.setXtreamPassword(xtreamPassword);
+
+        return compteRepository.save(compte);
+    }
+
+    // ✅ NOUVELLE MÉTHODE - Configurer/Mettre à jour les credentials Xtream
+    public Compte configurerXtream(String compteId, String xtreamBaseUrl,
+                                   String xtreamUsername, String xtreamPassword) {
+        Compte compte = compteRepository.findById(compteId)
+                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
+
+        compte.setXtreamBaseUrl(xtreamBaseUrl);
+        compte.setXtreamUsername(xtreamUsername);
+        compte.setXtreamPassword(xtreamPassword);
+
+        return compteRepository.save(compte);
+    }
+
+    // ✅ NOUVELLE MÉTHODE - Supprimer la config Xtream
+    public Compte supprimerConfigXtream(String compteId) {
+        Compte compte = compteRepository.findById(compteId)
+                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
+
+        compte.setXtreamBaseUrl(null);
+        compte.setXtreamUsername(null);
+        compte.setXtreamPassword(null);
 
         return compteRepository.save(compte);
     }
@@ -79,7 +127,6 @@ public class CompteService {
         Compte compte = compteRepository.findById(compteId)
                 .orElseThrow(() -> new RuntimeException("Compte introuvable"));
 
-        // Valider le type
         if (!type.equals("CHAINE") && !type.equals("FILM") && !type.equals("SERIE")) {
             throw new RuntimeException("Type invalide. Utilisez: CHAINE, FILM, ou SERIE");
         }

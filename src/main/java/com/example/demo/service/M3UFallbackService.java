@@ -32,7 +32,7 @@ public class M3UFallbackService {
      */
     public Flux<ContentItem> fetchM3UContent() {
         return m3uWebClient.get()
-                .uri(xtreamConfig.getM3uUrl())
+                .uri(userContextService.xtreamConfig())
                 .retrieve()
                 .bodyToFlux(DataBuffer.class)
                 .transform(this::processStreamingContent)

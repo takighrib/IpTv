@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 /**
  * DTO pour les réponses d'authentification
  */
+
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -37,6 +39,8 @@ public class AuthResponse {
     // Informations provider
     private String provider;
     private boolean isNewUser;
-}
 
+    // ✅ NOUVEAU - Indique si l'utilisateur a configuré Xtream
+    private boolean hasXtreamConfig;
+}
 

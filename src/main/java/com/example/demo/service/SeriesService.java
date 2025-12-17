@@ -1,12 +1,11 @@
 package com.example.demo.service;
 
-import com.example.demo.config.XtreamConfig;
+import com.example.demo.config.UserXtreamConfig;
 import com.example.demo.model.Series;
 import com.example.demo.repository.SeriesRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
-import reactor.core.publisher.Flux;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -18,35 +17,55 @@ public class SeriesService {
 
     private final SeriesRepository seriesRepository;
     private final WebClient webClient;
-    private final XtreamConfig xtreamConfig;
+    private final UserContextService userContextService;
+
+    /**
+     * Récupère les séries pour un utilisateur spécifique
+     */
+    public List<Map<String, Object>> fetchSeriesStreamsForUser(String userId) {
+        UserXtreamConfig config = userContextService.getUserXtreamConfigOrThrow(userId);
+        return fetchSeriesStreams(config);
+    }
 
     /**
      * Récupère la liste des séries depuis l'API Xtream
      */
-    public List<Map<String, Object>> fetchSeriesStreams() {
+    private List<Map<String, Object>> fetchSeriesStreams(UserXtreamConfig config) {
         try {
             List<Map<String, Object>> series = webClient.get()
-                    .uri(xtreamConfig.getSeriesUrl())
+                    .uri(config.getSeriesUrl())
                     .retrieve()
                     .bodyToMono(List.class)
                     .block();
 
             System.out.println("✅ Récupéré " + (series != null ? series.size() : 0) + " séries depuis Xtream API");
+
+            // ✅ Ajouter l'URL de streaming complète
+            if (series != null) {
+                for (Map<String, Object> serie : series) {
+                    Integer seriesId = parseIntSafely(serie.get("series_id"));
+                    String extension = getStringSafely(serie, "container_extension");
+                    if (seriesId > 0 && !extension.isEmpty()) {
+                        serie.put("stream_url", config.getSeriesStreamUrl(seriesId, extension));
+                    }
+                }
+            }
+
             return series != null ? series : new ArrayList<>();
 
         } catch (Exception e) {
             System.err.println("❌ Erreur API Séries : " + e.getMessage());
-            return fetchSeriesFromM3U();
+            return fetchSeriesFromM3U(config);
         }
     }
 
     /**
      * Fallback pour récupérer les séries depuis le M3U
      */
-    public List<Map<String, Object>> fetchSeriesFromM3U() {
+    private List<Map<String, Object>> fetchSeriesFromM3U(UserXtreamConfig config) {
         try {
             String m3uContent = webClient.get()
-                    .uri(xtreamConfig.getM3uUrl())
+                    .uri(config.getM3uUrl())
                     .retrieve()
                     .bodyToMono(String.class)
                     .block();
@@ -353,7 +372,7 @@ public class SeriesService {
     /**
      * Sauvegarde en lot pour de gros volumes
      */
-    public void saveSeriesStreamsBatch(List<Map<String, Object>> streams, int batchSize) {
+    private void saveSeriesStreamsBatch(List<Map<String, Object>> streams, int batchSize) {
         if (streams == null || streams.isEmpty()) {
             System.out.println("⚠ Aucune série à sauvegarder");
             return;
@@ -369,27 +388,28 @@ public class SeriesService {
     }
 
     /**
-     * Flux réactif pour les séries
+     * Synchronise et sauvegarde les séries pour un utilisateur
      */
-    public Flux<Map<String, Object>> fetchSeriesStreamsReactive() {
-        return webClient.get()
-                .uri(xtreamConfig.getSeriesUrl())
-                .retrieve()
-                .bodyToFlux(List.class)
-                .flatMapIterable(list -> (List<Map<String, Object>>) list)
-                .onErrorResume(throwable -> {
-                    System.err.println("❌ Erreur flux réactif Séries, fallback M3U: " + throwable.getMessage());
-                    return Flux.fromIterable(fetchSeriesFromM3U());
-                });
+    public List<Map<String, Object>> syncAndSaveSeriesStreamsForUser(String userId) {
+        List<Map<String, Object>> streams = fetchSeriesStreamsForUser(userId);
+
+        if (streams.size() > 1000) {
+            saveSeriesStreamsBatch(streams, 100);
+        } else {
+            saveSeriesStreams(streams);
+        }
+
+        return streams;
     }
 
     /**
      * Recherche de séries par nom
      */
     public List<Series> searchSeriesByName(String searchTerm) {
-        // TODO: Implémenter dans le repository
-        // return seriesRepository.findBySeriesNameContainingIgnoreCase(searchTerm);
-        return new ArrayList<>();
+        if (searchTerm == null || searchTerm.trim().isEmpty()) {
+            return new ArrayList<>();
+        }
+        return seriesRepository.findByNameContainingIgnoreCase(searchTerm.trim());
     }
 
     /**
@@ -426,22 +446,6 @@ public class SeriesService {
         // TODO: Implémenter dans le repository
         // return seriesRepository.findDistinctSeriesNames();
         return new ArrayList<>();
-    }
-
-    /**
-     * Méthode pratique pour synchroniser et sauvegarder
-     */
-    public List<Map<String, Object>> syncAndSaveSeriesStreams() {
-        List<Map<String, Object>> streams = fetchSeriesStreams();
-
-        // Utilise la sauvegarde par batch pour de gros volumes
-        if (streams.size() > 1000) {
-            saveSeriesStreamsBatch(streams, 100);
-        } else {
-            saveSeriesStreams(streams);
-        }
-
-        return streams;
     }
 
     // Méthodes utilitaires
