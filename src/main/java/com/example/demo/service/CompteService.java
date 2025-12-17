@@ -9,112 +9,233 @@ import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.example.demo.model.Compte;
+import com.example.demo.model.Playlist;
+import com.example.demo.repository.CompteRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
+
 @Service
-@RequiredArgsConstructor  // ✅ Injection par constructeur
+@RequiredArgsConstructor
+@Slf4j
 public class CompteService {
 
     private final CompteRepository compteRepository;
     private final PasswordEncoder passwordEncoder;
+    private final OtpService otpService;
+    private final EmailService emailService;
 
-    // Créer un compte
-    public Compte creerCompte(String email, String password, String nom, String prenom) {
+    /**
+     * Étape 1 : Crée un compte non vérifié et envoie l'OTP
+     */
+    @Transactional
+    public Compte creerCompteNonVerifie(String email, String password, String nom, String prenom) {
+        // Vérifier si l'email existe déjà
         if (compteRepository.existsByEmail(email)) {
-            throw new RuntimeException("Email déjà utilisé");
+            throw new RuntimeException("Cet email est déjà utilisé");
         }
 
-        Compte compte = new Compte();
-        compte.setEmail(email);
-        compte.setPassword(passwordEncoder.encode(password));
-        compte.setNom(nom);
-        compte.setPrenom(prenom);
-        compte.setUrl(generateUniqueUrl());
-        compte.setStatus("NON_PAYANT");
-        compte.setProvider("LOCAL");
+        // Créer le compte (non actif tant que l'email n'est pas vérifié)
+        Compte compte = Compte.builder()
+                .email(email)
+                .password(passwordEncoder.encode(password))
+                .nom(nom)
+                .prenom(prenom)
+                .url(generateUniqueUrl())
+                .dateCreation(LocalDateTime.now())
+                .isActive(false) // ✅ Désactivé jusqu'à vérification
+                .isEmailVerified(false)
+                .build();
 
-        return compteRepository.save(compte);
+        compte = compteRepository.save(compte);
+        log.info("✅ Compte créé (non vérifié) pour: {}", email);
+
+        // Envoyer l'OTP
+        otpService.creerEtEnvoyerOTP(email);
+        log.info("📧 OTP envoyé à: {}", email);
+
+        return compte;
     }
 
-    // ✅ NOUVELLE MÉTHODE - Créer un compte avec config Xtream
-    public Compte creerCompteAvecXtream(String email, String password, String nom, String prenom,
-                                        String xtreamBaseUrl, String xtreamUsername, String xtreamPassword) {
-        if (compteRepository.existsByEmail(email)) {
-            throw new RuntimeException("Email déjà utilisé");
+    /**
+     * Étape 2 : Vérifie l'OTP et active le compte
+     */
+    @Transactional
+    public Compte verifierEmailEtActiverCompte(String email, String codeOTP) {
+        // Vérifier l'OTP
+        if (!otpService.verifierOTP(email, codeOTP)) {
+            throw new RuntimeException("Code OTP invalide ou expiré");
         }
 
-        Compte compte = new Compte();
-        compte.setEmail(email);
-        compte.setPassword(passwordEncoder.encode(password));
-        compte.setNom(nom);
-        compte.setPrenom(prenom);
-        compte.setUrl(generateUniqueUrl());
-        compte.setStatus("NON_PAYANT");
-        compte.setProvider("LOCAL");
+        // Récupérer le compte
+        Compte compte = compteRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
 
-        // Configuration Xtream
-        compte.setXtreamBaseUrl(xtreamBaseUrl);
-        compte.setXtreamUsername(xtreamUsername);
-        compte.setXtreamPassword(xtreamPassword);
+        // Activer le compte
+        compte.setActive(true);
+        compte.setEmailVerified(true);
+        compte = compteRepository.save(compte);
 
-        return compteRepository.save(compte);
+        log.info("✅ Email vérifié et compte activé pour: {}", email);
+
+        // Envoyer email de bienvenue
+        emailService.envoyerEmailBienvenue(email, compte.getPrenom());
+
+        return compte;
     }
 
-    // ✅ NOUVELLE MÉTHODE - Configurer/Mettre à jour les credentials Xtream
-    public Compte configurerXtream(String compteId, String xtreamBaseUrl,
-                                   String xtreamUsername, String xtreamPassword) {
+    /**
+     * Renvoie un OTP
+     */
+    public void renvoyerOTP(String email) {
+        // Vérifier que le compte existe
+        if (!compteRepository.existsByEmail(email)) {
+            throw new RuntimeException("Aucun compte associé à cet email");
+        }
+
+        otpService.renvoyerOTP(email);
+        log.info("🔄 OTP renvoyé pour: {}", email);
+    }
+
+    /**
+     * Ajoute une playlist à un compte
+     */
+    @Transactional
+    public Compte ajouterPlaylist(String compteId, String nom, String xtreamBaseUrl,
+                                  String xtreamUsername, String xtreamPassword,
+                                  LocalDateTime dateExpiration) {
         Compte compte = compteRepository.findById(compteId)
                 .orElseThrow(() -> new RuntimeException("Compte introuvable"));
 
-        compte.setXtreamBaseUrl(xtreamBaseUrl);
-        compte.setXtreamUsername(xtreamUsername);
-        compte.setXtreamPassword(xtreamPassword);
+        // Créer la playlist
+        Playlist playlist = Playlist.builder()
+                .id(UUID.randomUUID().toString())
+                .nom(nom)
+                .xtreamBaseUrl(xtreamBaseUrl)
+                .xtreamUsername(xtreamUsername)
+                .xtreamPassword(xtreamPassword)
+                .dateExpiration(dateExpiration)
+                .dateCreation(LocalDateTime.now())
+                .isActive(true)
+                .build();
 
-        return compteRepository.save(compte);
+        // Ajouter la playlist au compte
+        compte.ajouterPlaylist(playlist);
+        compte = compteRepository.save(compte);
+
+        log.info("✅ Playlist '{}' ajoutée au compte {}", nom, compteId);
+        return compte;
     }
 
-    // ✅ NOUVELLE MÉTHODE - Supprimer la config Xtream
-    public Compte supprimerConfigXtream(String compteId) {
+    /**
+     * Met à jour une playlist
+     */
+    @Transactional
+    public Compte mettreAJourPlaylist(String compteId, String playlistId, String nom,
+                                      String xtreamBaseUrl, String xtreamUsername,
+                                      String xtreamPassword, LocalDateTime dateExpiration) {
         Compte compte = compteRepository.findById(compteId)
                 .orElseThrow(() -> new RuntimeException("Compte introuvable"));
 
-        compte.setXtreamBaseUrl(null);
-        compte.setXtreamUsername(null);
-        compte.setXtreamPassword(null);
-
-        return compteRepository.save(compte);
-    }
-
-    // Créer un compte Google
-    public Compte creerCompteGoogle(String email, String googleId, String nom) {
-        Optional<Compte> existant = compteRepository.findByEmail(email);
-        if (existant.isPresent()) {
-            return existant.get();
+        Playlist playlist = compte.trouverPlaylistParId(playlistId);
+        if (playlist == null) {
+            throw new RuntimeException("Playlist introuvable");
         }
 
-        Compte compte = new Compte();
-        compte.setEmail(email);
-        compte.setGoogleId(googleId);
-        compte.setNom(nom);
-        compte.setUrl(generateUniqueUrl());
-        compte.setStatus("NON_PAYANT");
-        compte.setProvider("GOOGLE");
+        // Mettre à jour les champs
+        if (nom != null) playlist.setNom(nom);
+        if (xtreamBaseUrl != null) playlist.setXtreamBaseUrl(xtreamBaseUrl);
+        if (xtreamUsername != null) playlist.setXtreamUsername(xtreamUsername);
+        if (xtreamPassword != null) playlist.setXtreamPassword(xtreamPassword);
+        if (dateExpiration != null) playlist.setDateExpiration(dateExpiration);
+        playlist.setDateModification(LocalDateTime.now());
 
-        return compteRepository.save(compte);
+        compte = compteRepository.save(compte);
+        log.info("✅ Playlist '{}' mise à jour", playlistId);
+        return compte;
     }
 
-    // Trouver par email
+    /**
+     * Supprime une playlist
+     */
+    @Transactional
+    public Compte supprimerPlaylist(String compteId, String playlistId) {
+        Compte compte = compteRepository.findById(compteId)
+                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
+
+        compte.retirerPlaylist(playlistId);
+        compte = compteRepository.save(compte);
+
+        log.info("✅ Playlist '{}' supprimée", playlistId);
+        return compte;
+    }
+
+    /**
+     * Ajoute un favori à une playlist
+     */
+    @Transactional
+    public Compte ajouterFavoriAPlaylist(String compteId, String playlistId,
+                                         String idContenu, String nomContenu, String type) {
+        Compte compte = compteRepository.findById(compteId)
+                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
+
+        Playlist playlist = compte.trouverPlaylistParId(playlistId);
+        if (playlist == null) {
+            throw new RuntimeException("Playlist introuvable");
+        }
+
+        playlist.ajouterFavori(idContenu, nomContenu, type);
+        compte = compteRepository.save(compte);
+
+        log.info("✅ Favori ajouté à la playlist '{}'", playlistId);
+        return compte;
+    }
+
+    /**
+     * Retire un favori d'une playlist
+     */
+    @Transactional
+    public Compte retirerFavoriDePlaylist(String compteId, String playlistId, String idContenu) {
+        Compte compte = compteRepository.findById(compteId)
+                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
+
+        Playlist playlist = compte.trouverPlaylistParId(playlistId);
+        if (playlist == null) {
+            throw new RuntimeException("Playlist introuvable");
+        }
+
+        playlist.retirerFavori(idContenu);
+        compte = compteRepository.save(compte);
+
+        log.info("✅ Favori retiré de la playlist '{}'", playlistId);
+        return compte;
+    }
+
+    /**
+     * Trouve un compte par email
+     */
     public Optional<Compte> trouverParEmail(String email) {
         return compteRepository.findByEmail(email);
     }
 
-    // Trouver par URL unique
+    /**
+     * Trouve un compte par URL
+     */
     public Optional<Compte> trouverParUrl(String url) {
         return compteRepository.findByUrl(url);
     }
 
-    // Vérifier les credentials
+    /**
+     * Vérifie les credentials
+     */
     public boolean verifierCredentials(String email, String password) {
         Optional<Compte> compte = compteRepository.findByEmail(email);
         return compte.isPresent() &&
@@ -122,79 +243,53 @@ public class CompteService {
                 passwordEncoder.matches(password, compte.get().getPassword());
     }
 
-    // Ajouter aux favoris
-    public Compte ajouterFavori(String compteId, String idContenu, String nomContenu, String type) {
-        Compte compte = compteRepository.findById(compteId)
-                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
-
-        if (!type.equals("CHAINE") && !type.equals("FILM") && !type.equals("SERIE")) {
-            throw new RuntimeException("Type invalide. Utilisez: CHAINE, FILM, ou SERIE");
-        }
-
-        compte.ajouterFavori(idContenu, nomContenu, type);
-        return compteRepository.save(compte);
+    /**
+     * Obtient tous les comptes
+     */
+    public List<Compte> obtenirTousLesComptes() {
+        return compteRepository.findAll();
     }
 
-    // Retirer des favoris
-    public Compte retirerFavori(String compteId, String idContenu) {
-        Compte compte = compteRepository.findById(compteId)
-                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
-
-        compte.retirerFavori(idContenu);
-        return compteRepository.save(compte);
+    /**
+     * Supprime un compte
+     */
+    @Transactional
+    public void supprimerCompte(String compteId) {
+        compteRepository.deleteById(compteId);
+        log.info("✅ Compte '{}' supprimé", compteId);
     }
 
-    // Passer en compte payant
-    public Compte passerEnPayant(String compteId, int dureeMois) {
-        Compte compte = compteRepository.findById(compteId)
-                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
-
-        compte.setStatus("PAYANT");
-        compte.setDateExpiration(LocalDateTime.now().plusMonths(dureeMois));
-        compte.setActive(true);
-
-        return compteRepository.save(compte);
-    }
-
-    // Passer en compte non payant
-    public Compte passerEnNonPayant(String compteId) {
-        Compte compte = compteRepository.findById(compteId)
-                .orElseThrow(() -> new RuntimeException("Compte introuvable"));
-
-        compte.setStatus("NON_PAYANT");
-        compte.setDateExpiration(null);
-
-        return compteRepository.save(compte);
-    }
-
-    // Vérifier l'expiration et mettre à jour le status
+    /**
+     * Vérifie les playlists expirées et les désactive
+     */
+    @Transactional
     public void verifierExpirations() {
         List<Compte> comptes = compteRepository.findAll();
         for (Compte compte : comptes) {
-            if (compte.isExpired()) {
-                compte.setStatus("NON_PAYANT");
-                compte.setActive(false);
+            boolean modified = false;
+            for (Playlist playlist : compte.getPlaylists()) {
+                if (playlist.isExpired() && playlist.isActive()) {
+                    playlist.setActive(false);
+                    modified = true;
+                    log.info("⚠️ Playlist '{}' expirée et désactivée", playlist.getId());
+                }
+            }
+            if (modified) {
                 compteRepository.save(compte);
             }
         }
     }
 
-    // Générer URL unique
+    /**
+     * Génère une URL unique
+     */
     private String generateUniqueUrl() {
         String url;
         do {
-            url = java.util.UUID.randomUUID().toString().substring(0, 8);
+            url = UUID.randomUUID().toString().substring(0, 8);
         } while (compteRepository.existsByUrl(url));
         return url;
     }
-
-    // Obtenir tous les comptes
-    public List<Compte> obtenirTousLesComptes() {
-        return compteRepository.findAll();
-    }
-
-    // Supprimer un compte
-    public void supprimerCompte(String compteId) {
-        compteRepository.deleteById(compteId);
-    }
 }
+
+

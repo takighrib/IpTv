@@ -6,13 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
-/**
- * DTO pour les réponses d'authentification
- */
-
-
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -29,18 +22,9 @@ public class AuthResponse {
     private String nom;
     private String prenom;
     private String url;
-    private String telephone;
 
-    // Informations abonnement
-    private String status;
-    private boolean isPayant;
-    private LocalDateTime dateExpiration;
-
-    // Informations provider
-    private String provider;
-    private boolean isNewUser;
-
-    // ✅ NOUVEAU - Indique si l'utilisateur a configuré Xtream
-    private boolean hasXtreamConfig;
+    // ✅ NOUVEAUX CHAMPS
+    private boolean isEmailVerified; // Indique si l'email est vérifié
+    private boolean hasPlaylists;    // Indique si l'utilisateur a des playlists
+    private int nombrePlaylists;     // Nombre de playlists
 }
-

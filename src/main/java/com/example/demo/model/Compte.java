@@ -12,9 +12,32 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 @Document(collection = "comptes")
 public class Compte {
 
@@ -23,71 +46,133 @@ public class Compte {
 
     @Indexed(unique = true)
     private String email;
+
     private String password;
 
     @Indexed(unique = true)
     private String url; // URL unique du profil utilisateur
 
-    // ✅ NOUVEAUX CHAMPS - Credentials Xtream de l'utilisateur
-    private String xtreamBaseUrl;    // Ex: http://buysmart.tn:8080
-    private String xtreamUsername;   // Ex: buysmart01370
-    private String xtreamPassword;   // Ex: 0731brd
-
-    private String status;
-    private List<Favori> favoris = new ArrayList<>();
+    // Informations de base
     private String nom;
     private String prenom;
-    private String telephone;
-    private LocalDateTime dateCreation = LocalDateTime.now();
-    private LocalDateTime dateExpiration;
-    private boolean isActive = true;
-    private String googleId;
-    private String provider = "LOCAL";
 
-    // Constructeur pour génération automatique d'URL unique
-    public Compte(String email, String password) {
+    // Liste des playlists associées au compte
+    @Builder.Default
+    private List<Playlist> playlists = new ArrayList<>();
+
+    // Dates
+    @Builder.Default
+    private LocalDateTime dateCreation = LocalDateTime.now();
+
+    @Builder.Default
+    private boolean isActive = true;
+
+    @Builder.Default
+    private boolean isEmailVerified = false; // ✅ NOUVEAU - Indique si l'email est vérifié
+
+    // Constructeur simplifié pour la création de compte
+    public Compte(String email, String password, String nom, String prenom) {
         this.email = email;
         this.password = password;
+        this.nom = nom;
+        this.prenom = prenom;
         this.url = generateUniqueUrl();
-        this.status = "NON_PAYANT";
-        this.favoris = new ArrayList<>();
-        this.provider = "LOCAL";
+        this.playlists = new ArrayList<>();
+        this.dateCreation = LocalDateTime.now();
+        this.isActive = true;
+        this.isEmailVerified = false;
     }
 
     private String generateUniqueUrl() {
         return UUID.randomUUID().toString().substring(0, 8);
     }
 
-    public void ajouterFavori(String idContenu, String nomContenu, String type) {
-        Favori favori = new Favori(idContenu, nomContenu, type);
-        if (!favoris.contains(favori)) {
-            favoris.add(favori);
+    // ✅ Méthodes pour gérer les playlists
+    public void ajouterPlaylist(Playlist playlist) {
+        if (playlist != null && !playlists.contains(playlist)) {
+            playlists.add(playlist);
         }
     }
 
-    public void retirerFavori(String idContenu) {
-        favoris.removeIf(f -> f.getIdContenu().equals(idContenu));
-    }
-
-    public boolean isExpired() {
-        if ("NON_PAYANT".equals(status)) {
-            return false;
+    public void retirerPlaylist(String playlistId) {
+        if (playlists != null) {
+            playlists.removeIf(p -> p.getId().equals(playlistId));
         }
-        return dateExpiration != null && LocalDateTime.now().isAfter(dateExpiration);
     }
 
-    public boolean isPayant() {
-        return "PAYANT".equals(status);
+    public Playlist trouverPlaylistParId(String playlistId) {
+        if (playlists == null) {
+            return null;
+        }
+        return playlists.stream()
+                .filter(p -> p.getId().equals(playlistId))
+                .findFirst()
+                .orElse(null);
     }
 
-    public boolean isGoogleAccount() {
-        return "GOOGLE".equals(provider);
+    public boolean hasPlaylists() {
+        return playlists != null && !playlists.isEmpty();
     }
 
-    // ✅ NOUVELLE MÉTHODE - Vérifier si l'utilisateur a configuré Xtream
-    public boolean hasXtreamConfig() {
-        return xtreamBaseUrl != null && !xtreamBaseUrl.isEmpty()
-                && xtreamUsername != null && !xtreamUsername.isEmpty()
-                && xtreamPassword != null && !xtreamPassword.isEmpty();
+    public int getNombrePlaylists() {
+        return playlists != null ? playlists.size() : 0;
+    }
+
+    // ✅ Méthode pour vérifier si au moins une playlist a une config Xtream valide
+    public boolean hasAnyValidXtreamConfig() {
+        return playlists != null && playlists.stream()
+                .anyMatch(Playlist::hasXtreamConfig);
+    }
+
+    /**
+     * Obtient la première playlist active
+     */
+    public Playlist getPremierPlaylistActive() {
+        if (playlists == null) {
+            return null;
+        }
+        return playlists.stream()
+                .filter(Playlist::isActive)
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * Obtient toutes les playlists actives
+     */
+    public List<Playlist> getPlaylistsActives() {
+        if (playlists == null) {
+            return new ArrayList<>();
+        }
+        return playlists.stream()
+                .filter(Playlist::isActive)
+                .toList();
+    }
+
+    /**
+     * Obtient toutes les playlists avec une config Xtream valide
+     */
+    public List<Playlist> getPlaylistsAvecXtreamValide() {
+        if (playlists == null) {
+            return new ArrayList<>();
+        }
+        return playlists.stream()
+                .filter(Playlist::hasXtreamConfig)
+                .toList();
+    }
+
+    @Override
+    public String toString() {
+        return "Compte{" +
+                "id='" + id + '\'' +
+                ", email='" + email + '\'' +
+                ", nom='" + nom + '\'' +
+                ", prenom='" + prenom + '\'' +
+                ", isActive=" + isActive +
+                ", isEmailVerified=" + isEmailVerified +
+                ", nombrePlaylists=" + getNombrePlaylists() +
+                '}';
     }
 }
+
+

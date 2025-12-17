@@ -83,13 +83,6 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         return;
                     }
 
-                    // Vérifie si le compte est expiré (pour les comptes payants)
-                    if (compte.isExpired()) {
-                        response.setStatus(HttpServletResponse.SC_PAYMENT_REQUIRED);
-                        response.setContentType("application/json");
-                        response.getWriter().write("{\"error\": \"Abonnement expiré\"}");
-                        return;
-                    }
 
                     // Crée un token d'authentification Spring Security
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
