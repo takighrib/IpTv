@@ -32,6 +32,12 @@ public interface OtpRepository extends MongoRepository<Otp, String> {
      */
     void deleteByDateExpirationBefore(LocalDateTime date);
 
+
+    void deleteByEmail(String email);
+
+
+    Optional<Otp> findByEmailAndType(String email, String type);
+
     /**
      * Vérifie si un OTP existe pour un email
      */

@@ -1,13 +1,11 @@
 package com.example.demo.security;
 
-
-import com.example.demo.service.CompteService;
-import com.example.demo.model.Compte;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
@@ -16,112 +14,82 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Optional;
 
-import org.springframework.context.annotation.Lazy;
-
-
-/**
- * Filtre pour intercepter et valider les tokens JWT dans les requêtes
- */
 @Component
+@RequiredArgsConstructor
+@Slf4j
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtUtil jwtUtil;
-    private final CompteService compteService;
-
-    // ✅ SOLUTION : Injection Lazy pour casser la dépendance circulaire
-    public JwtAuthenticationFilter(JwtUtil jwtUtil, @Lazy CompteService compteService) {
-        this.jwtUtil = jwtUtil;
-        this.compteService = compteService;
-    }
 
     @Override
     protected void doFilterInternal(
             HttpServletRequest request,
             HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+            FilterChain filterChain
+    ) throws ServletException, IOException {
 
         try {
-            // Récupère le header Authorization
-            final String authHeader = request.getHeader("Authorization");
+            // Récupérer le header Authorization
+            String authHeader = request.getHeader("Authorization");
 
-            // Si pas de header ou ne commence pas par "Bearer ", continuer sans authentification
+            log.debug("🔍 Request URL: {}", request.getRequestURI());
+            log.debug("🔍 Authorization Header: {}", authHeader != null ? "Present" : "Missing");
+
+            // Si pas de header Authorization, continuer sans authentification
             if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                log.debug("⚠️  No valid Authorization header found");
                 filterChain.doFilter(request, response);
                 return;
             }
 
-            // Extrait le token (retire "Bearer ")
-            final String jwt = authHeader.substring(7);
+            // Extraire le token (enlever "Bearer ")
+            String token = authHeader.substring(7);
+            log.debug("🔑 Token extracted (first 20 chars): {}...",
+                    token.length() > 20 ? token.substring(0, 20) : token);
 
-            // Valide le token
-            if (!jwtUtil.validateToken(jwt)) {
-                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                response.setContentType("application/json");
-                response.getWriter().write("{\"error\": \"Token invalide ou expiré\"}");
+            // Valider le token
+            if (!jwtUtil.validateToken(token)) {
+                log.warn("❌ Token validation failed");
+                filterChain.doFilter(request, response);
                 return;
             }
 
-            // Extrait l'email du token
-            final String email = jwtUtil.extractEmail(jwt);
+            // Extraire l'userId du token
+            String userId = jwtUtil.extractUserId(token);
+            log.debug("✅ Token valid for userId: {}", userId);
 
-            // Si l'email est présent et qu'il n'y a pas déjà d'authentification
-            if (email != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+            // Si l'utilisateur n'est pas déjà authentifié
+            if (userId != null && SecurityContextHolder.getContext().getAuthentication() == null) {
 
-                // Récupère le compte utilisateur
-                Optional<Compte> compteOpt = compteService.trouverParEmail(email);
+                // Créer l'authentification
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userId,
+                                null,
+                                new ArrayList<>()
+                        );
 
-                if (compteOpt.isPresent()) {
-                    Compte compte = compteOpt.get();
+                authentication.setDetails(
+                        new WebAuthenticationDetailsSource().buildDetails(request)
+                );
 
-                    // Vérifie si le compte est actif
-                    if (!compte.isActive()) {
-                        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                        response.setContentType("application/json");
-                        response.getWriter().write("{\"error\": \"Compte désactivé\"}");
-                        return;
-                    }
+                // Définir l'authentification dans le contexte Spring Security
+                SecurityContextHolder.getContext().setAuthentication(authentication);
 
-
-                    // Crée un token d'authentification Spring Security
-                    UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
-                            email,
-                            null,
-                            new ArrayList<>() // Pas de rôles pour l'instant
-                    );
-
-                    // Ajoute les détails de la requête
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-
-                    // Définit l'authentification dans le contexte de sécurité
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                }
+                log.debug("✅ User authenticated: {}", userId);
             }
 
         } catch (Exception e) {
-            logger.error("Erreur lors de l'authentification JWT: " + e.getMessage());
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
-            response.getWriter().write("{\"error\": \"Erreur d'authentification\"}");
-            return;
+            log.error("❌ Error in JWT filter: {}", e.getMessage());
         }
 
-        // Continue la chaîne de filtres
         filterChain.doFilter(request, response);
     }
-
-    /**
-     * Détermine si le filtre doit être appliqué à cette requête
-     */
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
-        String path = request.getRequestURI();
-
-        // Ne pas appliquer le filtre aux endpoints publics
-        return path.startsWith("/api/auth/") ||
-                path.startsWith("/actuator/") ||
-                path.startsWith("/v3/api-docs") ||
-                path.startsWith("/swagger-ui");
-    }
 }
+
+
+
+
+
+

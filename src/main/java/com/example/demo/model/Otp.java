@@ -1,6 +1,5 @@
 package com.example.demo.model;
 
-
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -21,10 +20,18 @@ public class Otp {
     @Id
     private String id;
 
-    @Indexed(unique = true)
+    @Indexed
     private String email;
 
     private String code; // Code OTP à 6 chiffres
+
+    /**
+     * Type d'OTP
+     * - "REGISTRATION" : pour l'inscription
+     * - "PASSWORD_RESET" : pour la réinitialisation de mot de passe
+     */
+    @Builder.Default
+    private String type = "REGISTRATION";
 
     @Builder.Default
     private LocalDateTime dateCreation = LocalDateTime.now();
@@ -72,6 +79,7 @@ public class Otp {
     public String toString() {
         return "Otp{" +
                 "email='" + email + '\'' +
+                ", type='" + type + '\'' +
                 ", isUsed=" + isUsed +
                 ", isExpired=" + isExpired() +
                 ", tentativesEchouees=" + tentativesEchouees +
@@ -79,5 +87,7 @@ public class Otp {
                 '}';
     }
 }
+
+
 
 

@@ -2,9 +2,7 @@ package com.example.demo.controller;
 
 
 import com.example.demo.dto.LoginRequest;
-import com.example.demo.dto.RegisterRequest;
 import com.example.demo.dto.AuthResponse;
-import com.example.demo.dto.GoogleLoginRequest;
 import com.example.demo.model.Compte;
 import com.example.demo.service.CompteService;
 import com.example.demo.security.JwtUtil;
@@ -13,26 +11,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import jakarta.validation.constraints.*;
-
 import java.util.Map;
 import java.util.Optional;
-
-
 import com.example.demo.dto.*;
-import com.example.demo.model.Compte;
-import com.example.demo.service.CompteService;
 import com.example.demo.service.OtpService;
-import com.example.demo.security.JwtUtil;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/auth")
