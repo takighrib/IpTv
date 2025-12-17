@@ -1,6 +1,5 @@
 package com.example.demo.service;
 
-import com.example.demo.config.XtreamConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -15,31 +14,23 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
+import com.example.demo.config.UserXtreamConfig;
 @Service
 @RequiredArgsConstructor
 public class M3UFallbackService {
 
     @Qualifier("m3uWebClient")
     private final WebClient m3uWebClient;
-    private final XtreamConfig xtreamConfig;
+    private final UserContextService userContextService;
 
     private static final int BUFFER_SIZE = 8192; // 8KB buffer
 
     /**
-     * Version optimisée qui traite le fichier M3U en streaming
-     * et sépare automatiquement par type de contenu
+     * Version optimisée qui traite le fichier M3U en streaming pour un utilisateur
      */
-    public Flux<ContentItem> fetchM3UContent() {
-        return m3uWebClient.get()
-                .uri(userContextService.xtreamConfig())
-                .retrieve()
-                .bodyToFlux(DataBuffer.class)
-                .transform(this::processStreamingContent)
-                .scan(new LineBuffer(), this::accumulateLines)
-                .filter(buffer -> buffer.hasCompleteLine())
-                .flatMap(this::extractContentFromBuffer)
-                .filter(Objects::nonNull);
+    public Flux<ContentItem> fetchM3UContentForUser(String userId) {
+        UserXtreamConfig config = userContextService.getUserXtreamConfigOrThrow(userId);
+        return fetchM3UContent(config.getM3uUrl());
     }
 
     /**
@@ -52,7 +43,7 @@ public class M3UFallbackService {
                 .bodyToFlux(DataBuffer.class)
                 .transform(this::processStreamingContent)
                 .scan(new LineBuffer(), this::accumulateLines)
-                .filter(buffer -> buffer.hasCompleteLine())
+                .filter(LineBuffer::hasCompleteLine)
                 .flatMap(this::extractContentFromBuffer)
                 .filter(Objects::nonNull);
     }
@@ -141,25 +132,21 @@ public class M3UFallbackService {
         String line = extinf.toLowerCase();
         String urlLower = url.toLowerCase();
 
-        // 1. Vérification par group-title
         ContentType groupType = determineTypeByGroup(line);
         if (groupType != ContentType.UNKNOWN) {
             return groupType;
         }
 
-        // 2. Vérification par patterns dans le nom/titre
         ContentType patternType = determineTypeByPatterns(line);
         if (patternType != ContentType.UNKNOWN) {
             return patternType;
         }
 
-        // 3. Vérification par URL
         ContentType urlType = determineTypeByUrl(urlLower);
         if (urlType != ContentType.UNKNOWN) {
             return urlType;
         }
 
-        // 4. Par défaut, considère comme Live Stream
         return ContentType.LIVE_STREAM;
     }
 
@@ -167,7 +154,6 @@ public class M3UFallbackService {
      * Détermine le type par group-title
      */
     private ContentType determineTypeByGroup(String line) {
-        // Live Streams
         String[] liveGroups = {
                 "group-title=\"live\"", "group-title=\"tv\"", "group-title=\"television\"",
                 "group-title=\"news\"", "group-title=\"sport\"", "group-title=\"sports\"",
@@ -176,14 +162,12 @@ public class M3UFallbackService {
                 "group-title=\"general\"", "group-title=\"national\"", "group-title=\"local\""
         };
 
-        // VOD
         String[] vodGroups = {
                 "group-title=\"movies\"", "group-title=\"vod\"", "group-title=\"films\"",
                 "group-title=\"cinema\"", "group-title=\"movie\"", "group-title=\"film\"",
                 "group-title=\"hollywood\"", "group-title=\"bollywood\""
         };
 
-        // Series
         String[] seriesGroups = {
                 "group-title=\"series\"", "group-title=\"tv shows\"", "group-title=\"shows\"",
                 "group-title=\"serie\"", "group-title=\"tv series\"", "group-title=\"drama\""
@@ -208,13 +192,11 @@ public class M3UFallbackService {
      * Détermine le type par patterns dans le contenu
      */
     private ContentType determineTypeByPatterns(String line) {
-        // Patterns pour séries
         String[] seriesPatterns = {
                 "season", "episode", "s\\d{2}e\\d{2}", "s\\d{1}e\\d{1,2}",
                 "saison", "épisode", "ep\\d+", "parte", "temporada"
         };
 
-        // Patterns pour VOD
         String[] vodPatterns = {
                 "720p", "1080p", "4k", "2160p", "bluray", "webrip", "dvdrip",
                 "hdtv", "web-dl", "brrip", "\\(\\d{4}\\)", "movie", "película"
@@ -239,7 +221,6 @@ public class M3UFallbackService {
      * Détermine le type par URL
      */
     private ContentType determineTypeByUrl(String url) {
-        // Extensions vidéo = VOD
         String[] videoExtensions = {
                 ".mp4", ".mkv", ".avi", ".mov", ".wmv",
                 ".flv", ".webm", ".m4v", ".3gp", ".m2ts"
@@ -251,17 +232,14 @@ public class M3UFallbackService {
             }
         }
 
-        // Patterns d'URL pour live streams
         if (url.contains("/live/") || url.contains(".ts") || url.contains(".m3u8")) {
             return ContentType.LIVE_STREAM;
         }
 
-        // Pattern Xtream pour series
         if (url.matches(".*series/.*") || url.contains("/episode/")) {
             return ContentType.SERIES;
         }
 
-        // Pattern Xtream pour VOD
         if (url.matches(".*movie/.*") || url.contains("/vod/")) {
             return ContentType.VOD;
         }
@@ -277,7 +255,6 @@ public class M3UFallbackService {
 
         if (extinf == null) return attributes;
 
-        // Patterns pour extraire les attributs
         String[] attrNames = {
                 "tvg-id", "tvg-name", "tvg-logo", "tvg-country",
                 "tvg-language", "group-title", "radio", "tvg-shift"
@@ -290,7 +267,6 @@ public class M3UFallbackService {
             }
         }
 
-        // Extrait aussi la durée
         Pattern durationPattern = Pattern.compile("#EXTINF:(-?\\d+(?:\\.\\d+)?)");
         Matcher matcher = durationPattern.matcher(extinf);
         if (matcher.find()) {
@@ -308,13 +284,11 @@ public class M3UFallbackService {
             return null;
         }
 
-        // Essaie d'abord tvg-name
         String name = extractAttribute(extinf, "tvg-name");
         if (name != null && !name.trim().isEmpty()) {
             return name.trim();
         }
 
-        // Fallback vers le nom après la virgule
         int commaIndex = extinf.lastIndexOf(',');
         if (commaIndex != -1 && commaIndex < extinf.length() - 1) {
             return extinf.substring(commaIndex + 1).trim();
@@ -345,8 +319,8 @@ public class M3UFallbackService {
     /**
      * Récupère les statistiques du parsing M3U
      */
-    public Mono<M3UParsingStats> getM3UParsingStats() {
-        return fetchM3UContent()
+    public Mono<M3UParsingStats> getM3UParsingStatsForUser(String userId) {
+        return fetchM3UContentForUser(userId)
                 .collectList()
                 .map(items -> {
                     Map<ContentType, Long> typeCount = new HashMap<>();
@@ -396,13 +370,11 @@ public class M3UFallbackService {
             this.attributes = attributes != null ? new HashMap<>(attributes) : new HashMap<>();
         }
 
-        // Getters
         public String getName() { return name; }
         public String getUrl() { return url; }
         public ContentType getType() { return type; }
         public Map<String, String> getAttributes() { return new HashMap<>(attributes); }
 
-        // Getters pour attributs spécifiques
         public String getTvgId() { return attributes.get("tvg-id"); }
         public String getTvgLogo() { return attributes.get("tvg-logo"); }
         public String getGroupTitle() { return attributes.get("group-title"); }

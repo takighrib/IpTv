@@ -4,8 +4,8 @@ import com.example.demo.config.UserXtreamConfig;
 import com.example.demo.model.Compte;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-
 import java.util.Optional;
+import com.example.demo.repository.CompteRepository;
 
 /**
  * Service pour gérer le contexte utilisateur et sa configuration Xtream
@@ -14,13 +14,13 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class UserContextService {
 
-    private final CompteService compteService;
+    private final CompteRepository compteRepository;
 
     /**
      * Récupère la configuration Xtream d'un utilisateur par son ID
      */
     public Optional<UserXtreamConfig> getUserXtreamConfig(String userId) {
-        Optional<Compte> compteOpt = compteService.trouverParEmail(userId);
+        Optional<Compte> compteOpt = compteRepository.findById(userId);
 
         if (compteOpt.isEmpty()) {
             return Optional.empty();
@@ -47,7 +47,8 @@ public class UserContextService {
     public UserXtreamConfig getUserXtreamConfigOrThrow(String userId) {
         return getUserXtreamConfig(userId)
                 .orElseThrow(() -> new RuntimeException(
-                        "Configuration Xtream non trouvée. Veuillez configurer vos credentials Xtream."
+                        "Configuration Xtream non trouvée pour l'utilisateur " + userId +
+                                ". Veuillez configurer vos credentials Xtream."
                 ));
     }
 
@@ -58,5 +59,12 @@ public class UserContextService {
         return getUserXtreamConfig(userId)
                 .map(UserXtreamConfig::isValid)
                 .orElse(false);
+    }
+
+    /**
+     * Récupère un compte par son ID
+     */
+    public Optional<Compte> getCompteById(String userId) {
+        return compteRepository.findById(userId);
     }
 }
