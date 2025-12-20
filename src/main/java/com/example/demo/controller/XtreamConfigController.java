@@ -115,6 +115,7 @@ public class XtreamConfigController {
                         userId,
                         playlistId,
                         null, // Garder le nom existant
+                        request.getXtreamBaseUrl(),
                         request.getXtreamUsername(),
                         request.getXtreamPassword(),
                         null // Garder l'expiration existante

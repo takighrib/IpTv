@@ -1,6 +1,7 @@
 package com.example.demo.model;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -79,7 +80,9 @@ public class Playlist {
 
     /**
      * Génère l'URL pour récupérer les live streams
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getLiveStreamsUrl() {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -90,7 +93,9 @@ public class Playlist {
 
     /**
      * Génère l'URL pour récupérer les VOD
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getVodStreamsUrl() {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -101,7 +106,9 @@ public class Playlist {
 
     /**
      * Génère l'URL pour récupérer les séries
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getSeriesUrl() {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -112,7 +119,9 @@ public class Playlist {
 
     /**
      * Génère l'URL pour récupérer l'EPG d'un stream
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getEpgUrl(Integer streamId) {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -123,7 +132,9 @@ public class Playlist {
 
     /**
      * Génère l'URL pour récupérer l'EPG complet
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getFullEpgUrl() {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -134,7 +145,9 @@ public class Playlist {
 
     /**
      * Génère l'URL M3U
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getM3uUrl() {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -145,7 +158,9 @@ public class Playlist {
 
     /**
      * Génère l'URL de streaming pour un live stream
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getLiveStreamUrl(Integer streamId) {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -155,7 +170,9 @@ public class Playlist {
 
     /**
      * Génère l'URL de streaming pour un VOD
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getVodStreamUrl(Integer vodId, String extension) {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -165,7 +182,9 @@ public class Playlist {
 
     /**
      * Génère l'URL de streaming pour une série
+     * ⚠️ @JsonIgnore pour éviter l'exception lors de la sérialisation JSON
      */
+    @JsonIgnore
     public String getSeriesStreamUrl(Integer seriesId, String extension) {
         if (!hasXtreamConfig()) {
             throw new IllegalStateException("Configuration Xtream incomplète");
@@ -205,5 +224,3 @@ public class Playlist {
                 '}';
     }
 }
-
-

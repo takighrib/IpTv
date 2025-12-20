@@ -112,6 +112,7 @@ public class CompteService {
         Playlist playlist = Playlist.builder()
                 .id(UUID.randomUUID().toString())
                 .nom(nom)
+                .xtreamBaseUrl(xtreamBaseUrl)
                 .xtreamUsername(xtreamUsername)
                 .xtreamPassword(xtreamPassword)
                 .dateExpiration(dateExpiration)
@@ -132,7 +133,7 @@ public class CompteService {
      */
     @Transactional
     public Compte mettreAJourPlaylist(String compteId, String playlistId, String nom,
-                                      String xtreamUsername,
+                                      String xtreamBaseUrl, String xtreamUsername,
                                       String xtreamPassword, LocalDateTime dateExpiration) {
         Compte compte = compteRepository.findById(compteId)
                 .orElseThrow(() -> new RuntimeException("Compte introuvable"));
@@ -144,6 +145,7 @@ public class CompteService {
 
         // Mettre à jour les champs
         if (nom != null) playlist.setNom(nom);
+        if (xtreamBaseUrl != null) playlist.setXtreamBaseUrl(xtreamBaseUrl);
         if (xtreamUsername != null) playlist.setXtreamUsername(xtreamUsername);
         if (xtreamPassword != null) playlist.setXtreamPassword(xtreamPassword);
         if (dateExpiration != null) playlist.setDateExpiration(dateExpiration);

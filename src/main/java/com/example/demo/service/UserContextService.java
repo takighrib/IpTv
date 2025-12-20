@@ -8,11 +8,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Service pour gérer le contexte utilisateur et sa configuration Xtream
- * Support multi-playlist
+ * Support multi-playlist avec fallback intelligent
  */
 @Service
 @RequiredArgsConstructor
@@ -30,7 +32,7 @@ public class UserContextService {
 
     /**
      * Vérifie si l'utilisateur a une configuration Xtream valide
-     * (au moins une playlist active avec credentials Xtream)
+     * (au moins une playlist avec credentials Xtream, même si inactive)
      */
     public boolean hasValidXtreamConfig(String userId) {
         Optional<Compte> compteOpt = compteRepository.findById(userId);
@@ -42,13 +44,18 @@ public class UserContextService {
 
         Compte compte = compteOpt.get();
 
-        // Vérifie si au moins une playlist a une config Xtream valide
-        return compte.hasAnyValidXtreamConfig();
+        // ✅ CHANGEMENT : Accepte les playlists actives OU inactives avec config valide
+        if (compte.getPlaylists() == null || compte.getPlaylists().isEmpty()) {
+            return false;
+        }
+
+        return compte.getPlaylists().stream()
+                .anyMatch(Playlist::hasXtreamConfig);
     }
 
     /**
      * Récupère la configuration Xtream de l'utilisateur
-     * Retourne la première playlist active avec une config valide
+     * Retourne la première playlist avec une config valide (active en priorité, sinon inactive)
      */
     public UserXtreamConfig getUserXtreamConfig(String userId) {
         Optional<Compte> compteOpt = compteRepository.findById(userId);
@@ -60,13 +67,28 @@ public class UserContextService {
 
         Compte compte = compteOpt.get();
 
-        // Récupère la première playlist active avec config valide
-        Playlist playlist = compte.getPremierPlaylistActive();
-
-        if (playlist == null || !playlist.hasXtreamConfig()) {
-            log.warn("⚠️ Aucune playlist active avec config Xtream pour userId: {}", userId);
+        if (compte.getPlaylists() == null || compte.getPlaylists().isEmpty()) {
+            log.warn("⚠️ Aucune playlist pour userId: {}", userId);
             return null;
         }
+
+        // ✅ AMÉLIORATION : Cherche d'abord une playlist active, sinon prend n'importe quelle playlist valide
+        Playlist playlist = compte.getPlaylists().stream()
+                .filter(p -> p.hasXtreamConfig() && p.isActive() && !p.isExpired())
+                .findFirst()
+                .orElse(
+                        compte.getPlaylists().stream()
+                                .filter(Playlist::hasXtreamConfig)
+                                .findFirst()
+                                .orElse(null)
+                );
+
+        if (playlist == null) {
+            log.warn("⚠️ Aucune playlist avec config Xtream valide pour userId: {}", userId);
+            return null;
+        }
+
+        log.info("✅ Config Xtream trouvée pour userId: {} (playlist: {})", userId, playlist.getNom());
 
         // Convertit la playlist en UserXtreamConfig
         return UserXtreamConfig.builder()
@@ -77,16 +99,42 @@ public class UserContextService {
     }
 
     /**
-     * Récupère la configuration Xtream ou lance une exception
+     * Récupère la configuration Xtream ou lance une exception avec un message détaillé
      */
     public UserXtreamConfig getUserXtreamConfigOrThrow(String userId) {
         UserXtreamConfig config = getUserXtreamConfig(userId);
 
         if (config == null) {
-            throw new RuntimeException(
-                    "Configuration Xtream non trouvée pour l'utilisateur. " +
-                            "Veuillez ajouter une playlist avec des credentials Xtream valides."
+            Optional<Compte> compteOpt = compteRepository.findById(userId);
+
+            if (compteOpt.isEmpty()) {
+                throw new RuntimeException("Compte introuvable.");
+            }
+
+            Compte compte = compteOpt.get();
+
+            if (!compte.hasPlaylists()) {
+                throw new RuntimeException(
+                        "Aucune playlist configurée. Veuillez ajouter une playlist avec des credentials Xtream."
+                );
+            }
+
+            // Diagnostique détaillé
+            long totalPlaylists = compte.getNombrePlaylists();
+            long playlistsAvecConfig = compte.getPlaylists().stream()
+                    .filter(Playlist::hasXtreamConfig)
+                    .count();
+            long playlistsActives = compte.getPlaylists().stream()
+                    .filter(Playlist::isActive)
+                    .count();
+
+            String message = String.format(
+                    "Configuration Xtream invalide. Total playlists: %d, Avec config: %d, Actives: %d. " +
+                            "Vérifiez que vos playlists ont des credentials Xtream valides.",
+                    totalPlaylists, playlistsAvecConfig, playlistsActives
             );
+
+            throw new RuntimeException(message);
         }
 
         return config;
@@ -160,6 +208,33 @@ public class UserContextService {
         }
 
         return compteOpt.get().getPlaylistsAvecXtreamValide().size();
+    }
+
+    /**
+     * Obtient la liste des playlists avec diagnostic
+     */
+    public List<String> getPlaylistDiagnostic(String userId) {
+        Optional<Compte> compteOpt = compteRepository.findById(userId);
+
+        if (compteOpt.isEmpty()) {
+            return List.of("Compte introuvable");
+        }
+
+        Compte compte = compteOpt.get();
+
+        if (!compte.hasPlaylists()) {
+            return List.of("Aucune playlist configurée");
+        }
+
+        return compte.getPlaylists().stream()
+                .map(p -> String.format(
+                        "Playlist '%s' - Active: %b, Config Xtream: %b, Expirée: %b",
+                        p.getNom(),
+                        p.isActive(),
+                        p.hasXtreamConfig(),
+                        p.isExpired()
+                ))
+                .collect(Collectors.toList());
     }
 
     /**
