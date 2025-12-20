@@ -29,11 +29,7 @@ public class CompteController {
         return ResponseEntity.ok(compteService.trouverParEmail(id).orElse(null));
     }
 
-    // Obtenir compte par URL unique
-    @GetMapping("/url/{url}")
-    public ResponseEntity<Compte> obtenirCompteParUrl(@PathVariable String url) {
-        return ResponseEntity.ok(compteService.trouverParUrl(url).orElse(null));
-    }
+    
 
 
     // Supprimer compte

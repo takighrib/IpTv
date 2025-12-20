@@ -11,8 +11,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.Map;
 import java.util.Optional;
+
+
 import com.example.demo.dto.*;
 import com.example.demo.service.OtpService;
 
@@ -85,7 +88,6 @@ public class AuthController {
                     .email(compte.getEmail())
                     .nom(compte.getNom())
                     .prenom(compte.getPrenom())
-                    .url(compte.getUrl())
                     .isEmailVerified(true)
                     .hasPlaylists(compte.hasPlaylists())
                     .build();
@@ -198,7 +200,6 @@ public class AuthController {
                     .email(compte.getEmail())
                     .nom(compte.getNom())
                     .prenom(compte.getPrenom())
-                    .url(compte.getUrl())
                     .isEmailVerified(compte.isEmailVerified())
                     .hasPlaylists(compte.hasPlaylists())
                     .nombrePlaylists(compte.getNombrePlaylists())
@@ -299,5 +300,25 @@ public class AuthController {
                 "success", true,
                 "message", "Déconnexion réussie"
         ));
+    }
+
+    @PostMapping("/delete")
+    public ResponseEntity<?> deleteAccount(@RequestParam String email) {
+        try {
+            if (compteService.deleteAccount(email)) {
+                return ResponseEntity.ok(Map.of(
+                        "success", true,
+                        "message", "Account is deleted with success!"
+                ));
+            } else {
+                return ResponseEntity.notFound().build();
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of(
+                            "success", false,
+                            "message", "Error while deleting the account with email: " + email + e.getMessage()
+                    ));
+        }
     }
 }

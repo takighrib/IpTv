@@ -3,19 +3,13 @@ package com.example.demo.service;
 
 import com.example.demo.model.Compte;
 import com.example.demo.repository.CompteRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import io.micrometer.common.util.StringUtils;
 import org.springframework.stereotype.Service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import com.example.demo.model.Compte;
 import com.example.demo.model.Playlist;
-import com.example.demo.repository.CompteRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -49,7 +43,6 @@ public class CompteService {
                 .password(passwordEncoder.encode(password))
                 .nom(nom)
                 .prenom(prenom)
-                .url(generateUniqueUrl())
                 .dateCreation(LocalDateTime.now())
                 .isActive(false) // ✅ Désactivé jusqu'à vérification
                 .isEmailVerified(false)
@@ -119,7 +112,6 @@ public class CompteService {
         Playlist playlist = Playlist.builder()
                 .id(UUID.randomUUID().toString())
                 .nom(nom)
-                .xtreamBaseUrl(xtreamBaseUrl)
                 .xtreamUsername(xtreamUsername)
                 .xtreamPassword(xtreamPassword)
                 .dateExpiration(dateExpiration)
@@ -140,7 +132,7 @@ public class CompteService {
      */
     @Transactional
     public Compte mettreAJourPlaylist(String compteId, String playlistId, String nom,
-                                      String xtreamBaseUrl, String xtreamUsername,
+                                      String xtreamUsername,
                                       String xtreamPassword, LocalDateTime dateExpiration) {
         Compte compte = compteRepository.findById(compteId)
                 .orElseThrow(() -> new RuntimeException("Compte introuvable"));
@@ -152,7 +144,6 @@ public class CompteService {
 
         // Mettre à jour les champs
         if (nom != null) playlist.setNom(nom);
-        if (xtreamBaseUrl != null) playlist.setXtreamBaseUrl(xtreamBaseUrl);
         if (xtreamUsername != null) playlist.setXtreamUsername(xtreamUsername);
         if (xtreamPassword != null) playlist.setXtreamPassword(xtreamPassword);
         if (dateExpiration != null) playlist.setDateExpiration(dateExpiration);
@@ -226,12 +217,7 @@ public class CompteService {
         return compteRepository.findByEmail(email);
     }
 
-    /**
-     * Trouve un compte par URL
-     */
-    public Optional<Compte> trouverParUrl(String url) {
-        return compteRepository.findByUrl(url);
-    }
+
 
     /**
      * Vérifie les credentials
@@ -280,15 +266,14 @@ public class CompteService {
         }
     }
 
-    /**
-     * Génère une URL unique
-     */
-    private String generateUniqueUrl() {
-        String url;
-        do {
-            url = UUID.randomUUID().toString().substring(0, 8);
-        } while (compteRepository.existsByUrl(url));
-        return url;
+
+
+
+    public boolean deleteAccount(String email) {
+        if(!StringUtils.isEmpty(email) && compteRepository.existsByEmail(email)) {
+            return compteRepository.deleteByEmail(email);
+        }
+        return false;
     }
 }
 

@@ -101,7 +101,6 @@ public class PlaylistController {
                     userId,
                     playlistId,
                     request.getNom(),
-                    request.getXtreamBaseUrl(),
                     request.getXtreamUsername(),
                     request.getXtreamPassword(),
                     request.getDateExpiration()

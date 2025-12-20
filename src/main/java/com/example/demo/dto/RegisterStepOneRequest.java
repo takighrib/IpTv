@@ -21,11 +21,9 @@ public class RegisterStepOneRequest {
     @Size(min = 6, message = "Le mot de passe doit contenir au moins 6 caractères")
     private String password;
 
-    @NotBlank(message = "Le nom est obligatoire")
     @Size(min = 2, max = 50, message = "Le nom doit contenir entre 2 et 50 caractères")
     private String nom;
 
-    @NotBlank(message = "Le prénom est obligatoire")
     @Size(min = 2, max = 50, message = "Le prénom doit contenir entre 2 et 50 caractères")
     private String prenom;
 }

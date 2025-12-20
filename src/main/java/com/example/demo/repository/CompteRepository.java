@@ -5,20 +5,6 @@ import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
-import com.example.demo.model.Compte;
-import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.data.mongodb.repository.Query;
-import org.springframework.stereotype.Repository;
-
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Optional;
-
-import com.example.demo.model.Compte;
-import org.springframework.data.mongodb.repository.MongoRepository;
-import org.springframework.data.mongodb.repository.Query;
-import org.springframework.stereotype.Repository;
-
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -33,26 +19,13 @@ public interface CompteRepository extends MongoRepository<Compte, String> {
      */
     Optional<Compte> findByEmail(String email);
 
-    /**
-     * Recherche par URL unique
-     */
-    Optional<Compte> findByUrl(String url);
 
     /**
      * Vérifier si un email existe
      */
     boolean existsByEmail(String email);
 
-    /**
-     * Vérifier si une URL existe
-     */
-    boolean existsByUrl(String url);
 
-    // ========== RECHERCHES PAR STATUT ==========
-
-    /**
-     * Trouver les comptes actifs
-     */
     List<Compte> findByIsActive(boolean isActive);
 
     /**
@@ -117,10 +90,7 @@ public interface CompteRepository extends MongoRepository<Compte, String> {
     @Query("{ $or: [ { 'playlists': { $exists: false } }, { 'playlists': [] } ] }")
     List<Compte> findAccountsWithoutPlaylists();
 
-    // Note: Pour les méthodes de comptage de playlists, on les implémente dans le service
-    // car MongoDB query sans $expr ne peut pas facilement compter les éléments d'un tableau
 
-    // ========== STATISTIQUES ==========
 
     /**
      * Compte tous les comptes
@@ -152,6 +122,8 @@ public interface CompteRepository extends MongoRepository<Compte, String> {
      */
     @Query(value = "{ 'isEmailVerified': false, 'dateCreation': { $lt: ?0 } }", delete = true)
     void deleteUnverifiedAccountsCreatedBefore(LocalDateTime date);
+
+    boolean deleteByEmail(String email);
 }
 
 
