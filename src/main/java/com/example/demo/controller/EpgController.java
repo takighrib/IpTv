@@ -29,7 +29,6 @@ class EpgController {
             List<Map<String, Object>> epgList = epgService.fetchEpgForStreamForUser(userId, streamId);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "streamId", streamId,
                     "count", epgList.size(),
                     "epg", epgList
@@ -37,7 +36,6 @@ class EpgController {
 
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }
@@ -56,21 +54,18 @@ class EpgController {
 
             if (currentProgram == null) {
                 return ResponseEntity.ok(Map.of(
-                        "success", true,
                         "streamId", streamId,
                         "message", "Aucun programme en cours"
                 ));
             }
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "streamId", streamId,
                     "currentProgram", currentProgram
             ));
 
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }

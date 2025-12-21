@@ -37,7 +37,6 @@ public class PasswordResetController {
             passwordResetService.sendResetOtp(request.getEmail());
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Un code de vérification a été envoyé à votre email",
                     "email", request.getEmail()
             ));
@@ -45,7 +44,6 @@ public class PasswordResetController {
         } catch (Exception e) {
             log.error("❌ Erreur forgot password: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", e.getMessage()
             ));
         }
@@ -63,7 +61,6 @@ public class PasswordResetController {
             passwordResetService.verifyResetOtp(request.getEmail(), request.getCode());
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Code OTP vérifié avec succès",
                     "email", request.getEmail()
             ));
@@ -71,7 +68,6 @@ public class PasswordResetController {
         } catch (Exception e) {
             log.error("❌ Erreur vérification OTP: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", e.getMessage()
             ));
         }
@@ -93,7 +89,6 @@ public class PasswordResetController {
             );
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Mot de passe réinitialisé avec succès",
                     "email", request.getEmail()
             ));
@@ -101,7 +96,6 @@ public class PasswordResetController {
         } catch (Exception e) {
             log.error("❌ Erreur reset password: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", e.getMessage()
             ));
         }
@@ -119,7 +113,6 @@ public class PasswordResetController {
             passwordResetService.sendResetOtp(request.getEmail());
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Un nouveau code a été envoyé à votre email",
                     "email", request.getEmail()
             ));
@@ -127,7 +120,6 @@ public class PasswordResetController {
         } catch (Exception e) {
             log.error("❌ Erreur resend OTP: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", e.getMessage()
             ));
         }

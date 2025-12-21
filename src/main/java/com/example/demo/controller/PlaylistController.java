@@ -43,7 +43,6 @@ public class PlaylistController {
             );
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Playlist ajoutée avec succès",
                     "nombrePlaylists", compte.getNombrePlaylists()
             ));
@@ -51,7 +50,6 @@ public class PlaylistController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur lors de l'ajout de la playlist: " + e.getMessage()
                     ));
         }
@@ -70,7 +68,6 @@ public class PlaylistController {
                     .orElseThrow(() -> new RuntimeException("Compte introuvable"));
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "playlists", compte.getPlaylists(),
                     "total", compte.getNombrePlaylists()
             ));
@@ -78,7 +75,6 @@ public class PlaylistController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }
@@ -108,14 +104,12 @@ public class PlaylistController {
             );
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Playlist mise à jour avec succès"
             ));
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }
@@ -136,14 +130,12 @@ public class PlaylistController {
             compteService.supprimerPlaylist(userId, playlistId);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Playlist supprimée avec succès"
             ));
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }
@@ -169,14 +161,12 @@ public class PlaylistController {
             compteService.ajouterFavoriAPlaylist(userId, playlistId, idContenu, nomContenu, type);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Favori ajouté avec succès"
             ));
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }
@@ -198,14 +188,12 @@ public class PlaylistController {
             compteService.retirerFavoriDePlaylist(userId, playlistId, idContenu);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Favori retiré avec succès"
             ));
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }

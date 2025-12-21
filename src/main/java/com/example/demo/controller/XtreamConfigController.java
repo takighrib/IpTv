@@ -133,7 +133,6 @@ public class XtreamConfigController {
             }
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Configuration Xtream mise à jour avec succès",
                     "hasXtreamConfig", userContextService.hasValidXtreamConfig(userId)
             ));
@@ -141,7 +140,6 @@ public class XtreamConfigController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur lors de la mise à jour: " + e.getMessage()
                     ));
         }
@@ -164,7 +162,7 @@ public class XtreamConfigController {
 
             if (compteOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("success", false, "message", "Compte introuvable"));
+                        .body(Map.of( "message", "Compte introuvable"));
             }
 
             Compte compte = compteOpt.get();
@@ -178,14 +176,12 @@ public class XtreamConfigController {
             }
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "message", "Configuration Xtream supprimée"
             ));
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }
@@ -208,7 +204,7 @@ public class XtreamConfigController {
 
             if (compteOpt.isEmpty()) {
                 return ResponseEntity.status(HttpStatus.NOT_FOUND)
-                        .body(Map.of("success", false, "message", "Compte introuvable"));
+                        .body(Map.of( "message", "Compte introuvable"));
             }
 
             Compte compte = compteOpt.get();
@@ -228,19 +224,17 @@ public class XtreamConfigController {
             }
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "hasXtreamConfig", userContextService.hasValidXtreamConfig(userId),
                     "nombrePlaylists", compte.getNombrePlaylists(),
                     "playlistsActives", userContextService.getActivePlaylistCount(userId),
                     "xtreamBaseUrl", baseUrl,
                     "xtreamUsername", username
-                    // ⚠️ NE PAS RETOURNER LE MOT DE PASSE
+
             ));
 
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
-                            "success", false,
                             "message", "Erreur: " + e.getMessage()
                     ));
         }

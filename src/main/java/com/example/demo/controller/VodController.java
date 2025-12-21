@@ -27,13 +27,11 @@ public class VodController {
             List<Map<String, Object>> vods = vodService.fetchVodStreamsForUser(userId);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "count", vods.size(),
                     "vods", vods
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }
@@ -50,13 +48,11 @@ public class VodController {
             List<Map<String, Object>> results = vodService.searchVodByTitle(userId, title);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "count", results.size(),
                     "results", results
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }
@@ -71,13 +67,11 @@ public class VodController {
             List<String> categories = vodService.getAvailableCategories(userId);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "count", categories.size(),
                     "categories", categories
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }

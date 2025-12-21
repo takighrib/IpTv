@@ -28,13 +28,11 @@ public class SeriesController {
             List<Map<String, Object>> series = seriesService.fetchSeriesStreamsForUser(userId);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "count", series.size(),
                     "series", series
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }
@@ -51,13 +49,11 @@ public class SeriesController {
             List<Map<String, Object>> results = seriesService.searchSeriesByName(userId, name);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "count", results.size(),
                     "results", results
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }
@@ -72,13 +68,11 @@ public class SeriesController {
             List<String> seriesNames = seriesService.getAllSeriesNames(userId);
 
             return ResponseEntity.ok(Map.of(
-                    "success", true,
                     "count", seriesNames.size(),
                     "seriesNames", seriesNames
             ));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
                     "message", "❌ Erreur: " + e.getMessage()
             ));
         }

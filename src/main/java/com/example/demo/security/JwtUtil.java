@@ -147,6 +147,21 @@ public class JwtUtil {
     }
 
     /**
+     * ✅ NOUVEAU - Récupère le temps restant avant expiration (en secondes)
+     */
+    public Long getTimeUntilExpirationInSeconds(String token) {
+        Long milliseconds = getTimeUntilExpiration(token);
+        return milliseconds != null ? milliseconds / 1000 : 0L;
+    }
+
+    /**
+     * ✅ NOUVEAU - Récupère la durée de validité du token en secondes
+     */
+    public Long getTokenExpirationInSeconds() {
+        return jwtConfig.getExpiration() / 1000;
+    }
+
+    /**
      * Vérifie si le token doit être rafraîchi (expire dans moins de 1 heure)
      */
     public Boolean shouldRefreshToken(String token) {
