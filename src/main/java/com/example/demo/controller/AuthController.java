@@ -90,16 +90,9 @@ public class AuthController {
 
             // Construire la réponse
             AuthResponse response = AuthResponse.builder()
-                    .success(true)
                     .message("Inscription réussie ! Votre email a été vérifié.")
                     .token(accessToken)
                     .refreshToken(refreshToken.getToken())
-                    .userId(compte.getId())
-                    .email(compte.getEmail())
-                    .nom(compte.getNom())
-                    .prenom(compte.getPrenom())
-                    .isEmailVerified(true)
-                    .hasPlaylists(compte.hasPlaylists())
                     .accessTokenExpiresIn(jwtUtil.getTokenExpirationInSeconds())
                     .refreshTokenExpiresIn((long) refreshExpirationDays * 24 * 60 * 60)
                     .build();
@@ -206,17 +199,9 @@ public class AuthController {
 
             // Construire la réponse
             AuthResponse response = AuthResponse.builder()
-                    .success(true)
                     .message("Connexion réussie")
                     .token(accessToken)
                     .refreshToken(refreshToken.getToken())
-                    .userId(compte.getId())
-                    .email(compte.getEmail())
-                    .nom(compte.getNom())
-                    .prenom(compte.getPrenom())
-                    .isEmailVerified(compte.isEmailVerified())
-                    .hasPlaylists(compte.hasPlaylists())
-                    .nombrePlaylists(compte.getNombrePlaylists())
                     .accessTokenExpiresIn(jwtUtil.getTokenExpirationInSeconds())
                     .refreshTokenExpiresIn((long) refreshExpirationDays * 24 * 60 * 60)
                     .build();
