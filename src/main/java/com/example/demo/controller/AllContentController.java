@@ -33,13 +33,8 @@ public class AllContentController {
         try {
             String token = authHeader.substring(7);
             String userId = jwtUtil.extractUserId(token);
-
-            log.info("📦 Requête GET ALL CONTENT pour userId: {}", userId);
-
             Map<String, Object> content = allContentService.getAllContentForUser(userId);
-
             return ResponseEntity.ok(content);
-
         } catch (Exception e) {
             log.error("❌ Erreur GET ALL CONTENT: {}", e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
@@ -59,11 +54,8 @@ public class AllContentController {
         try {
             String token = authHeader.substring(7);
             String userId = jwtUtil.extractUserId(token);
-
             log.info("🔍 Requête SEARCH ALL pour userId: {} - query: {}", userId, query);
-
             Map<String, Object> results = allContentService.searchAllContent(userId, query);
-
             return ResponseEntity.ok(results);
 
         } catch (Exception e) {
@@ -83,11 +75,8 @@ public class AllContentController {
         try {
             String token = authHeader.substring(7);
             String userId = jwtUtil.extractUserId(token);
-
             log.info("📂 Requête ALL CATEGORIES pour userId: {}", userId);
-
             Map<String, Object> categories = allContentService.getAllCategories(userId);
-
             return ResponseEntity.ok(categories);
 
         } catch (Exception e) {

@@ -90,11 +90,9 @@ public class AuthController {
 
             // Construire la réponse
             AuthResponse response = AuthResponse.builder()
-                    .message("Inscription réussie ! Votre email a été vérifié.")
                     .token(accessToken)
                     .refreshToken(refreshToken.getToken())
                     .accessTokenExpiresIn(jwtUtil.getTokenExpirationInSeconds())
-                    .refreshTokenExpiresIn((long) refreshExpirationDays * 24 * 60 * 60)
                     .build();
 
             return ResponseEntity.ok(response);
@@ -199,11 +197,9 @@ public class AuthController {
 
             // Construire la réponse
             AuthResponse response = AuthResponse.builder()
-                    .message("Connexion réussie")
                     .token(accessToken)
                     .refreshToken(refreshToken.getToken())
                     .accessTokenExpiresIn(jwtUtil.getTokenExpirationInSeconds())
-                    .refreshTokenExpiresIn((long) refreshExpirationDays * 24 * 60 * 60)
                     .build();
 
             return ResponseEntity.ok(response);
@@ -254,11 +250,9 @@ public class AuthController {
             refreshTokenService.revoquerToken(refreshTokenValue);
 
             return ResponseEntity.ok(Map.of(
-                    "message", "Tokens rafraîchis avec succès",
                     "token", newAccessToken,
                     "refreshToken", newRefreshToken.getToken(),
-                    "accessTokenExpiresIn", jwtUtil.getTokenExpirationInSeconds(),
-                    "refreshTokenExpiresIn", (long) refreshExpirationDays * 24 * 60 * 60
+                    "accessTokenExpiresIn", jwtUtil.getTokenExpirationInSeconds()
             ));
 
         } catch (RuntimeException e) {
